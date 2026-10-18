@@ -1,0 +1,35 @@
+# .NET outputs and IDE state
+**/bin/
+**/obj/
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Local builds, release archives and private QA evidence
+artifacts/
+dist/
+releases/
+qa/
+*.exe
+*.dll
+*.pdb
+*.zip
+*.log
+*.jsonl
+*-events.*
+*-stderr.*
+
+# User layouts, local settings, credentials and agent session state
+profiles/
+settings.json
+*.bad
+*.tmp
+.env
+.env.*
+.claude/
+.claude-*/
+.codex/
+*credentials*
+*ACCOUNT_SESSION*
