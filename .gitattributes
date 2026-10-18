@@ -5,4 +5,5 @@
 *.md text eol=lf
 *.yml text eol=lf
 *.png binary
+*.gif binary
 *.zip binary

@@ -33,3 +33,9 @@ settings.json
 .codex/
 *credentials*
 *ACCOUNT_SESSION*
+
+# Remotion documentation animation dependencies and render intermediates
+**/node_modules/
+media/**/out/
+media/**/build/
+media/**/.remotion/

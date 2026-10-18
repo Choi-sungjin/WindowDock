@@ -6,11 +6,22 @@
 
 [실행 파일 다운로드](https://github.com/Choi-sungjin/WindowDock/releases/latest) · [사용법](docs/사용법.md) · [검증 범위](docs/검증.md)
 
+![창자리 동작 설명: 배치 저장, 버튼으로 복원, 새 창 자동 배치, 수동 이동과 빈자리 유지](docs/images/windowdock-demo.gif)
+
+*22초 동작 설명 애니메이션입니다. 이해를 돕기 위해 단순화한 예시 화면이며, 실제 UI 녹화나 개인 배치 데이터가 아닙니다. [애니메이션 소스와 재생성 방법](media/windowdock-demo/README.md)*
+
+<details>
+<summary>실제 앱 화면 보기</summary>
+
 ![창자리 관리 화면](docs/images/windowdock.png)
 
-*시험용 창 3개로 확인한 실제 화면입니다. 개인 배치 데이터는 포함하지 않았습니다.*
+시험용 창 3개로 확인한 실제 화면입니다. 개인 배치 데이터는 포함하지 않았습니다.
+
+</details>
 
 ## 시작하기
+
+처음 사용하는 PC에서는 **빈 배치 목록**으로 시작합니다. 개인 배치는 다운로드에 포함되지 않으므로, 자신의 창을 배치한 다음 직접 등록하세요. 기존 PC에서 업데이트하거나 다시 내려받으면 로컬에 저장한 배치는 유지됩니다.
 
 1. Releases에서 **WindowDock-v0.1.0-win-x64.zip**을 받아 원하는 폴더에 압축을 풉니다.
 2. **WindowLayoutManager.exe**를 실행합니다. 설치 프로그램이나 별도의 .NET 런타임은 필요하지 않습니다.
@@ -46,6 +57,7 @@
 - 활성 배치와 감시 설정: `%APPDATA%\WindowLayoutManager\settings.json`
 - 기존 **창 배치 매니저**의 데이터를 그대로 사용합니다. 호환성을 위해 실행 파일명과 저장 폴더명은 `WindowLayoutManager`를 유지합니다.
 - 사용자 배치, 창 제목, 개인 실행 경로, 계정 설정 및 개발 대화 로그는 이 저장소와 배포 ZIP에 포함하지 않습니다.
+- 개인 배치는 각 PC의 위 저장 폴더에만 남습니다. 다른 사용자의 배치를 기본값으로 제공하지 않습니다.
 
 ## 소스에서 빌드하기
 
@@ -81,6 +93,7 @@ src/WindowLayoutManager/
   Model/      배치·창 정보 모델
   Cli/        명령행 기능과 검사 도구
 docs/         사용법과 검증 범위
+media/        README 설명 GIF의 Remotion 소스
 ```
 
 문제가 있으면 [Issues](https://github.com/Choi-sungjin/WindowDock/issues)에 재현 순서와 기대 동작을 알려주세요. 진단 파일에는 창 제목과 실행 경로가 들어갈 수 있으므로 공유 전에 내용을 확인해 주세요.
