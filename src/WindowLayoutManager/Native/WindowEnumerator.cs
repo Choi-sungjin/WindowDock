@@ -43,6 +43,24 @@ public sealed class WindowEnumerator
         {
             try
             {
+                // Own-process windows are rejected FIRST, before any title read. GetWindowText on a
+                // window owned by the current process SENDS WM_GETTEXT synchronously to the owning
+                // thread; if that thread (e.g. Microsoft.Win32.SystemEvents' hidden window thread) is
+                // itself waiting on our UI thread, the UI thread deadlocks ("응답 없음"). The excluded
+                // record keeps the reason and class (GetClassName sends no message) with a blank title.
+                GetWindowThreadProcessId(hwnd, out uint ownerPid);
+                if (IsOwnProcess((int)ownerPid, currentProcessId))
+                {
+                    excluded.Add(new ExcludedWindow
+                    {
+                        Hwnd = hwnd,
+                        Reason = "own_process",
+                        ClassName = TryClass(hwnd),
+                        Title = ""
+                    });
+                    return true;
+                }
+
                 var (included, info, reason) = Inspect(hwnd, shellHwnd, currentProcessId);
                 if (included && info is not null)
                 {
@@ -55,6 +73,8 @@ public sealed class WindowEnumerator
                         Hwnd = hwnd,
                         Reason = reason,
                         ClassName = TryClass(hwnd),
+                        // Foreign-process window: GetWindowText returns the stored caption without
+                        // waiting for that process's message loop.
                         Title = TryTitle(hwnd)
                     });
                 }
@@ -105,7 +125,8 @@ public sealed class WindowEnumerator
 
                 GetWindowThreadProcessId(hwnd, out uint pidRaw);
                 int pid = (int)pidRaw;
-                if (pid == 0 || pid == currentPid) return true;
+                // Own-process check (incl. Environment.ProcessId) BEFORE the title read below.
+                if (pid == 0 || IsOwnProcess(pid, currentPid)) return true;
 
                 var (exePath, procName, startTicks, idErr) = GetProcessIdentity(pid);
                 if (idErr is not null) return true;
@@ -277,9 +298,19 @@ public sealed class WindowEnumerator
 
     public static string ReadClassName(IntPtr hwnd) => TryClass(hwnd);
 
+    /// <summary>
+    /// True for the current process, whatever currentPid a caller passes. Windows owned by this
+    /// process must never have their title read (synchronous WM_GETTEXT, see Enumerate).
+    /// </summary>
+    public static bool IsOwnProcess(int pid, int currentPid) => pid == currentPid || pid == Environment.ProcessId;
+
     private (bool included, WindowInfo? info, string? reason) Inspect(IntPtr hwnd, IntPtr shellHwnd, int currentPid)
     {
         if (hwnd == shellHwnd) return (false, null, "shell_root");
+        // Defense in depth: Enumerate already filters own-process windows before calling Inspect,
+        // but this method must never reach TryTitle for one either.
+        GetWindowThreadProcessId(hwnd, out uint earlyPid);
+        if (IsOwnProcess((int)earlyPid, currentPid)) return (false, null, "own_process");
         if (!IsWindowVisible(hwnd)) return (false, null, "not_visible");
         var root = GetAncestor(hwnd, GA_ROOT);
         if (root != hwnd) return (false, null, "not_root");
@@ -306,7 +337,7 @@ public sealed class WindowEnumerator
         GetWindowThreadProcessId(hwnd, out uint pidRaw);
         var pid = (int)pidRaw;
         if (pid == 0) return (false, null, "no_pid");
-        if (pid == currentPid) return (false, null, "own_process");
+        if (IsOwnProcess(pid, currentPid)) return (false, null, "own_process");
 
         var (exePath, procName, startTicks, idErr) = GetProcessIdentity(pid);
         if (idErr is not null) return (false, null, idErr);
@@ -405,6 +436,10 @@ public sealed class WindowEnumerator
 
     private static string TryTitle(IntPtr hwnd)
     {
+        // Last line of defense: never send a synchronous WM_GETTEXT(LENGTH) to one of our own
+        // threads' windows, whatever the caller did.
+        GetWindowThreadProcessId(hwnd, out uint pid);
+        if ((int)pid == Environment.ProcessId) return "";
         int len = GetWindowTextLength(hwnd);
         if (len <= 0) return "";
         var sb = new StringBuilder(len + 2);

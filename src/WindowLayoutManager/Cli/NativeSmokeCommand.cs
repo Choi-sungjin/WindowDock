@@ -937,6 +937,70 @@ public static class NativeSmokeCommand
                 }
             }
 
+            // (g) Round 22: an UNRESPONSIVE owned fixture in another process must still be enumerated
+            //     (caption read without waiting for its message loop) and enumeration must stay
+            //     bounded. Read-only: no move/close is sent while it is hung; only a 200 ms
+            //     WM_NULL SendMessageTimeout probe to confirm it is actually not responding.
+            {
+                string hungMarker = "wlmHung7f2";
+                var psiHung = new ProcessStartInfo(exePath) { UseShellExecute = false };
+                psiHung.ArgumentList.Add("--test-window"); psiHung.ArgumentList.Add(hungMarker);
+                psiHung.ArgumentList.Add("--x"); psiHung.ArgumentList.Add("700");
+                psiHung.ArgumentList.Add("--y"); psiHung.ArgumentList.Add("120");
+                psiHung.ArgumentList.Add("--w"); psiHung.ArgumentList.Add("360");
+                psiHung.ArgumentList.Add("--h"); psiHung.ArgumentList.Add("240");
+                psiHung.ArgumentList.Add("--lifetime-ms"); psiHung.ArgumentList.Add("15000");
+                psiHung.ArgumentList.Add("--hang-ms"); psiHung.ArgumentList.Add("3500");
+                var hungProc = Process.Start(psiHung) ?? throw new InvalidOperationException("hung_fixture_spawn_failed");
+                children.Add(hungProc);
+                allowedPids.Add(hungProc.Id);
+
+                long maxEnumMs = 0;
+                WindowInfo? hungWin = null;
+                var hungDeadline = DateTime.UtcNow.AddMilliseconds(2500);
+                while (DateTime.UtcNow < hungDeadline && hungWin is null)
+                {
+                    var swh = Stopwatch.StartNew();
+                    var snapH = enumRaw.Enumerate(Process.GetCurrentProcess().Id);
+                    maxEnumMs = Math.Max(maxEnumMs, swh.ElapsedMilliseconds);
+                    hungWin = snapH.Windows.FirstOrDefault(x => x.Identity.Pid == hungProc.Id
+                                                                && x.Title.Contains(hungMarker, StringComparison.OrdinalIgnoreCase));
+                    if (hungWin is null) Thread.Sleep(100);
+                }
+                bool hungConfirmed = false;
+                long metaMs = -1;
+                bool metaIncluded = false;
+                if (hungWin != null)
+                {
+                    ownedStartTicks[hungProc.Id] = hungWin.Identity.ProcessStartTicks;
+                    if (VerifyOwnedHwnd(hungWin.Identity.Hwnd, hungProc.Id, "hung_probe"))
+                    {
+                        hungConfirmed = SendMessageTimeout(hungWin.Identity.Hwnd, WM_NULL, IntPtr.Zero, IntPtr.Zero,
+                            SMTO_ABORTIFHUNG, 200, out _) == IntPtr.Zero;
+                    }
+                    var swm = Stopwatch.StartNew();
+                    var meta = enumRaw.EnumerateAnyTopLevelWithMetadata(Process.GetCurrentProcess().Id);
+                    metaMs = swm.ElapsedMilliseconds;
+                    metaIncluded = meta.Any(x => x.Identity.Pid == hungProc.Id && x.Title.Contains(hungMarker, StringComparison.OrdinalIgnoreCase));
+                    // One more visible enumerate while (still) hung.
+                    var swh2 = Stopwatch.StartNew();
+                    enumRaw.Enumerate(Process.GetCurrentProcess().Id);
+                    maxEnumMs = Math.Max(maxEnumMs, swh2.ElapsedMilliseconds);
+                }
+                steps.Add(new
+                {
+                    step = "foreign_hung_fixture_enumerated_bounded",
+                    ok = hungWin != null && hungConfirmed && metaIncluded && maxEnumMs < 1000 && metaMs >= 0 && metaMs < 1000,
+                    included = hungWin != null,
+                    title = hungWin?.Title,
+                    hungConfirmedByWmNullTimeout = hungConfirmed,
+                    metadataIncluded = metaIncluded,
+                    maxEnumerateMs = maxEnumMs,
+                    metadataEnumerateMs = metaMs,
+                    hungPid = hungProc.Id
+                });
+            }
+
             // 10. Mutation scope — every provider mutation target MUST be an allowed fixture PID
             steps.Add(new
             {

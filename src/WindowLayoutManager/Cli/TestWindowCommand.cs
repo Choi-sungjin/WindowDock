@@ -18,6 +18,9 @@ public static class TestWindowCommand
         int hideAfterMs = int.Parse(CliCommon.GetArg(args, "--hide-after-ms") ?? "0");
         int showAfterMs = int.Parse(CliCommon.GetArg(args, "--show-after-ms") ?? "0");
         string startState = CliCommon.GetArg(args, "--start-state") ?? "normal"; // normal|minimized|maximized
+        // QA: keep the UI thread from pumping messages for N ms right after the window exists
+        // (an unresponsive owned fixture). Keep below ~5 s so Windows does not ghost it.
+        int hangMs = Math.Clamp(int.Parse(CliCommon.GetArg(args, "--hang-ms") ?? "0"), 0, 4500);
         _minTrackWidth = int.Parse(CliCommon.GetArg(args, "--min-track-w") ?? "0");
         _minTrackHeight = int.Parse(CliCommon.GetArg(args, "--min-track-h") ?? "0");
         _maxTrackWidth = int.Parse(CliCommon.GetArg(args, "--max-track-w") ?? "0");
@@ -99,6 +102,8 @@ public static class TestWindowCommand
             }) { IsBackground = true };
             shower.Start();
         }
+
+        if (hangMs > 0) Thread.Sleep(hangMs);
 
         // Standard message pump
         while (GetMessageW(out MSG msg, IntPtr.Zero, 0, 0) > 0)

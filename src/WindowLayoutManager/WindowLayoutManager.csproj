@@ -13,7 +13,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <SatelliteResourceLanguages>en;ko-KR</SatelliteResourceLanguages>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Company>WindowDock</Company>
     <Product>창자리 (WindowDock)</Product>
     <AssemblyTitle>창자리 (WindowDock)</AssemblyTitle>

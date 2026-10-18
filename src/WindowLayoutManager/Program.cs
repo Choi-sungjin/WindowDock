@@ -25,6 +25,9 @@ internal static class Program
                 case "--tray-start-smoke":
                     ApplicationConfiguration.Initialize();
                     return TrayStartSmokeCommand.Run(args);
+                case "--hotkey-smoke":
+                    ApplicationConfiguration.Initialize();
+                    return HotkeySmokeCommand.Run(args);
                 case "--native-smoke":
                     return NativeSmokeCommand.Run(args);
                 case "--test-window":
@@ -65,7 +68,10 @@ internal static class Program
         // user who paused monitoring stays paused.
         monitor.InitializeFromSettings();
 
-        var form = new MainForm(profiles, settings, monitor, provider, startInTray: startInTray);
+        // hotkeys.json lives beside settings.json but is a separate file, so settings persistence
+        // can never erase slot/hotkey bindings. A missing file means "all keys off, slots empty".
+        var hotkeys = new HotkeyStore(dataDir);
+        var form = new MainForm(profiles, settings, monitor, provider, startInTray: startInTray, hotkeyStore: hotkeys);
         Application.Run(form);
         return 0;
     }
@@ -83,6 +89,8 @@ internal static class Program
         Console.Error.WriteLine("  --self-test --output <r>");
         Console.Error.WriteLine("  --ui-smoke <png> --data-dir <d> [--output <r>]");
         Console.Error.WriteLine("  --tray-start-smoke --output <r>");
+        Console.Error.WriteLine("  --hotkey-smoke --output <r> [--wait-os-hotkey <초>]");
+        Console.Error.WriteLine("                                            (격리 임시 데이터 + 가상 창만 사용, 실제 사용자 창 미조작)");
         Console.Error.WriteLine("  --native-smoke --output <r> --data-dir <d>");
         Console.Error.WriteLine("  --test-window <marker> [--x --y --w --h --lifetime-ms]");
     }

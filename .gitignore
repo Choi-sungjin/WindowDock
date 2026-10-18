@@ -39,3 +39,7 @@ settings.json
 media/**/out/
 media/**/build/
 media/**/.remotion/
+
+# Local shortcut assignments
+hotkeys.json
+corrupt/

@@ -4,7 +4,7 @@ using WindowLayoutManager.Services;
 
 namespace WindowLayoutManager.Cli;
 
-public static class SelfTestCommand
+public static partial class SelfTestCommand
 {
     public static int Run(string[] args)
     {
@@ -74,6 +74,8 @@ public static class SelfTestCommand
             T_MonitoringServiceLastPersistError_SetOnSaveFailure,
             T_MonitoringServiceLastPersistError_ClearedOnSuccess,
         };
+        // v0.2.0: quick-apply slots, Previous/Next navigation, hotkeys.json and registration rollback.
+        tests.AddRange(HotkeyRoundTests());
 
         var results = new List<object>();
         int pass = 0, fail = 0;

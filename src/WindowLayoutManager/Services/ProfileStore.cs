@@ -212,12 +212,29 @@ public sealed class SettingsStore
     /// <summary>Pure validation of an existing settings.json. Returns null when valid, otherwise an
     /// explanation. Does not read LastLoadError or mutate state. Shared by Load (for user feedback)
     /// and Save (for save-time backup decisions regardless of whether Load was ever called).</summary>
+    /// <summary>
+    /// Never throws. JsonObject materializes lazily, so duplicate property names (e.g. two "version"
+    /// keys) throw ArgumentException on first access; that must count as an invalid file (defaults +
+    /// preserved original), not crash startup.
+    /// </summary>
     private static string? ValidateExisting(string path)
+    {
+        try
+        {
+            return ValidateExistingCore(path);
+        }
+        catch (Exception ex)
+        {
+            return $"JSON 구조 오류 (중복된 속성 이름 등): {ex.GetType().Name}";
+        }
+    }
+
+    private static string? ValidateExistingCore(string path)
     {
         if (!File.Exists(path)) return null;
         string raw;
         try { raw = File.ReadAllText(path); }
-        catch (Exception ex) { return $"읽기 오류: {ex.Message}"; }
+        catch (Exception ex) { return $"읽기 오류: {ex.GetType().Name}"; }
         JsonNode? root;
         try { root = JsonNode.Parse(raw); }
         catch (JsonException je) { return $"JSON 파싱 실패: {je.Message}"; }

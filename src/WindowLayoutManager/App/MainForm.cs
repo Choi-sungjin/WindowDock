@@ -47,10 +47,35 @@ public sealed class MainForm : Form
     private bool _bootstrapped;
     private bool _firstShowConsumed;
 
+    // --- v0.2.0 quick-apply slots / global hotkeys ---
+    private readonly HotkeyStore _hotkeyStore;
+    private GlobalHotkeyWindow? _hotkeyWindow;
+    private HotkeyController? _hotkeyController;
+    private readonly Button[] _slotButtons = new Button[HotkeyActions.SlotCount];
+    private readonly Button _prevBtn = new();
+    private readonly Button _nextBtn = new();
+    private readonly Button _hotkeySettingsBtn = new();
+    private readonly ToolTip _quickTips = new() { AutoPopDelay = 15000, InitialDelay = 400, ReshowDelay = 200 };
+    private TableLayoutPanel? _quickBar;
+    private bool _quickApplyInProgress;
+    private bool _hotkeyDialogOpen;
+    private int _hotkeyInvocationCount;
+    private int _quickApplyCount;
+    private int _hotkeySuppressedCount;
+    private int _hotkeyForwardedCount;
+    private HotkeySettingsDialog? _openHotkeyDialog;
+
     public MainForm(ProfileStore profiles, SettingsStore settings, MonitoringService monitor, IWindowProvider provider)
         : this(profiles, settings, monitor, provider, startInTray: false) { }
 
     public MainForm(ProfileStore profiles, SettingsStore settings, MonitoringService monitor, IWindowProvider provider, bool startInTray)
+        : this(profiles, settings, monitor, provider, startInTray, hotkeyStore: null) { }
+
+    /// <summary>
+    /// hotkeyStore null → hotkeys.json in the same data directory as the profile store. Loading a
+    /// missing hotkeys.json never writes a file, so existing callers (UI/tray smoke) are unaffected.
+    /// </summary>
+    public MainForm(ProfileStore profiles, SettingsStore settings, MonitoringService monitor, IWindowProvider provider, bool startInTray, HotkeyStore? hotkeyStore)
     {
         _profiles = profiles;
         _profilesOriginal = profiles;
@@ -58,6 +83,7 @@ public sealed class MainForm : Form
         _monitor = monitor;
         _provider = provider;
         _startInTray = startInTray;
+        _hotkeyStore = hotkeyStore ?? new HotkeyStore(Path.GetDirectoryName(profiles.ProfilesDir) ?? profiles.ProfilesDir);
 
         Text = "창자리 (WindowDock)";
         Size = new Size(1180, 760);
@@ -104,6 +130,11 @@ public sealed class MainForm : Form
 
         Load += (_, _) => Bootstrap();
         FormClosing += OnFormClosing;
+        Disposed += (_, _) =>
+        {
+            ShutdownHotkeys();
+            _quickTips.Dispose();
+        };
     }
 
     /// <summary>
@@ -122,6 +153,10 @@ public sealed class MainForm : Form
         _bootstrapped = true;
         _ = this.Handle;
         ReloadProfiles();
+        // Hotkeys are registered here (also in tray-only start). Loading/registering never applies
+        // a layout or moves a window.
+        InitializeHotkeys();
+        RefreshQuickBar();
         RefreshTrayMenu();
         UpdateHeader();
         UpdateEmptyState();
@@ -270,8 +305,11 @@ public sealed class MainForm : Form
 
         split.Panel2.Controls.Add(rightSplit);
 
+        _quickBar = BuildQuickBar();
+
         Controls.Add(split);
         Controls.Add(bottom);
+        Controls.Add(_quickBar);
         Controls.Add(header);
 
         HandleCreated += (_, _) =>
@@ -287,6 +325,67 @@ public sealed class MainForm : Form
         };
     }
 
+    /// <summary>
+    /// One row: eight numbered slot buttons, Previous/Next apply, and the hotkey settings button.
+    /// Percent columns keep every button visible at the 920x600 minimum size; AutoEllipsis trims
+    /// long profile names at the END so the slot number at the start always stays visible.
+    /// </summary>
+    private TableLayoutPanel BuildQuickBar()
+    {
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 42,
+            ColumnCount = HotkeyActions.SlotCount + 3,
+            RowCount = 1,
+            Padding = new Padding(8, 3, 8, 3),
+            AccessibleName = "빠른 적용"
+        };
+        for (int i = 0; i < HotkeyActions.SlotCount; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 8f));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14f));
+        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+
+        for (int i = 0; i < HotkeyActions.SlotCount; i++)
+        {
+            int n = i + 1;
+            var b = new Button
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(2),
+                AutoEllipsis = true,
+                UseMnemonic = false,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = $"{n}  (비어 있음)",
+                AccessibleName = $"슬롯 {n}"
+            };
+            b.Click += (_, _) => PerformSlotApply(n, fromHotkey: false);
+            _slotButtons[i] = b;
+            bar.Controls.Add(b, i, 0);
+        }
+
+        void Style(Button b, string text)
+        {
+            b.Dock = DockStyle.Fill;
+            b.Margin = new Padding(2);
+            b.AutoEllipsis = true;
+            b.UseMnemonic = false;
+            b.Text = text;
+            b.AccessibleName = text;
+        }
+        Style(_prevBtn, "◀ 이전 배치");
+        Style(_nextBtn, "다음 배치 ▶");
+        Style(_hotkeySettingsBtn, "단축키 설정…");
+        _prevBtn.Click += (_, _) => PerformNavigateApply(next: false, fromHotkey: false);
+        _nextBtn.Click += (_, _) => PerformNavigateApply(next: true, fromHotkey: false);
+        _hotkeySettingsBtn.Click += (_, _) => DoHotkeySettings();
+        bar.Controls.Add(_prevBtn, HotkeyActions.SlotCount, 0);
+        bar.Controls.Add(_nextBtn, HotkeyActions.SlotCount + 1, 0);
+        bar.Controls.Add(_hotkeySettingsBtn, HotkeyActions.SlotCount + 2, 0);
+        return bar;
+    }
+
     private void ReloadProfiles()
     {
         _profilesCache = _profiles.LoadAll(out var errs);
@@ -299,7 +398,7 @@ public sealed class MainForm : Form
         var curId = (_profileList.SelectedItem as ProfileRow)?.Profile.Id ?? _selectedProfile?.Id;
         _profileList.BeginUpdate();
         _profileList.Items.Clear();
-        foreach (var p in _profilesCache.OrderBy(p => p.Name))
+        foreach (var p in ProfileOrdering.Sort(_profilesCache))
         {
             _profileList.Items.Add(new ProfileRow(p, p.Id == _monitor.ActiveProfile?.Id));
         }
@@ -326,6 +425,8 @@ public sealed class MainForm : Form
             _preview.Set(Array.Empty<ProfileEntry>(), WindowEnumerator.EnumerateMonitors());
         }
         UpdateEmptyState();
+        // Slot labels follow renames (bindings are by stable profile ID).
+        RefreshQuickBar();
     }
 
     private void OnProfileSelected()
@@ -385,12 +486,19 @@ public sealed class MainForm : Form
     private void RefreshTrayMenu()
     {
         TrayApplyMenu.DropDownItems.Clear();
-        foreach (var p in _profilesCache.OrderBy(p => p.Name))
+        foreach (var p in ProfileOrdering.Sort(_profilesCache))
         {
             var captured = p;
             var item = new ToolStripMenuItem(p.Name) { Tag = p };
             item.Click += (_, _) =>
             {
+                // The tray menu stays usable while a confirmation/edit modal is open on the main
+                // form; applying then would change the active/selected profile under that modal.
+                if (IsExplicitApplyBlocked(out var why))
+                {
+                    AppendStatus($"트레이 적용을 하지 않았습니다: {why}. 창을 닫은 뒤 다시 시도하세요.");
+                    return;
+                }
                 _monitor.SetActiveProfile(captured);
                 var reports = _monitor.ApplyActiveProfile();
                 BeginInvoke(new Action(() =>
@@ -481,7 +589,9 @@ public sealed class MainForm : Form
             return UpdateOutcome.NoWindows;
         }
 
-        var proposal = ProfileUpdater.Build(_selectedProfile, snap.Windows);
+        // The confirmation below is modal; act on exactly this profile afterwards.
+        var target = _selectedProfile;
+        var proposal = ProfileUpdater.Build(target, snap.Windows);
         var changeLog = string.Join("\n", proposal.Updates.Select(u => u.Action switch
         {
             UpdateAction.WouldUpdate => $"- {u.Role}: {u.NewRect.X},{u.NewRect.Y} {u.NewRect.Width}x{u.NewRect.Height}" + (u.NewMaximized ? " [최대화]" : ""),
@@ -504,14 +614,14 @@ public sealed class MainForm : Form
 
         // Save succeeded. Copy proposed contents into the live model (keeps object identity so UI
         // references stay valid), then refresh monitor if this is the active profile.
-        ProfileUpdater.CopyInto(_selectedProfile, proposal.Proposed);
-        if (_monitor.ActiveProfile?.Id == _selectedProfile.Id)
+        ProfileUpdater.CopyInto(target, proposal.Proposed);
+        if (_monitor.ActiveProfile?.Id == target.Id)
         {
             _monitor.RefreshActiveFromDisk();
         }
         ReloadProfiles();
         RefreshTrayMenu();
-        AppendStatus($"업데이트: {_selectedProfile.Name} (변경 {proposal.UpdatedCount}, 보존 {proposal.PreservedNoMatchCount + proposal.PreservedAmbiguousCount})");
+        AppendStatus($"업데이트: {target.Name} (변경 {proposal.UpdatedCount}, 보존 {proposal.PreservedNoMatchCount + proposal.PreservedAmbiguousCount})");
         return UpdateOutcome.Applied;
     }
 
@@ -564,8 +674,10 @@ public sealed class MainForm : Form
     private void DoRename()
     {
         if (_selectedProfile is null) return;
+        var targetId = _selectedProfile.Id;
         using var dlg = new InputDialog("배치 이름 변경", "새 이름:", _selectedProfile.Name);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        if (_selectedProfile?.Id != targetId) { NotifyError("선택된 배치가 바뀌어 이름 변경을 취소했습니다."); return; }
         PerformRename(dlg.Value);
     }
 
@@ -601,9 +713,11 @@ public sealed class MainForm : Form
     private void DoDelete()
     {
         if (_selectedProfile is null) return;
-        if (MessageBox.Show(this, $"'{_selectedProfile.Name}' 배치를 삭제하시겠습니까?", "확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        _profiles.Delete(_selectedProfile.Id);
-        if (_monitor.ActiveProfile?.Id == _selectedProfile.Id)
+        // Act on exactly the profile named in the confirmation, even if selection changes meanwhile.
+        var target = _selectedProfile;
+        if (MessageBox.Show(this, $"'{target.Name}' 배치를 삭제하시겠습니까?", "확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        _profiles.Delete(target.Id);
+        if (_monitor.ActiveProfile?.Id == target.Id)
         {
             _monitor.SetActiveProfile(null);
         }
@@ -617,8 +731,10 @@ public sealed class MainForm : Form
     {
         if (_selectedProfile is null || _entryList.SelectedItems.Count == 0) return;
         var entry = (ProfileEntry)_entryList.SelectedItems[0].Tag!;
+        var targetId = _selectedProfile.Id;
         using var dlg = new EntryEditDialog(entry);
         if (dlg.ShowDialog(this) != DialogResult.OK) return;
+        if (_selectedProfile?.Id != targetId) { NotifyError("선택된 배치가 바뀌어 항목 편집을 취소했습니다."); return; }
         PerformEditEntry(entry.Id, dlg.RoleResult, dlg.TitleContainsResult, dlg.RectResult, dlg.MaximizedResult);
     }
 
@@ -663,7 +779,9 @@ public sealed class MainForm : Form
     {
         if (_selectedProfile is null || _entryList.SelectedItems.Count == 0) return;
         var entry = (ProfileEntry)_entryList.SelectedItems[0].Tag!;
+        var targetId = _selectedProfile.Id;
         if (MessageBox.Show(this, $"'{entry.Role}' 항목을 삭제하시겠습니까?", "확인", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+        if (_selectedProfile?.Id != targetId) { NotifyError("선택된 배치가 바뀌어 항목 삭제를 취소했습니다."); return; }
         PerformRemoveEntry(entry.Id);
     }
 
@@ -692,6 +810,342 @@ public sealed class MainForm : Form
         }
         OnProfileSelected();
         return UpdateOutcome.Applied;
+    }
+
+    // ===================== v0.2.0 quick apply + global hotkeys =====================
+
+    private void InitializeHotkeys()
+    {
+        try
+        {
+            _hotkeyWindow = new GlobalHotkeyWindow();
+            _hotkeyWindow.HotkeyMessage += OnHotkeyMessage;
+            _hotkeyController = new HotkeyController(_hotkeyStore, _hotkeyWindow);
+            _hotkeyController.Initialize();
+            if (_hotkeyController.LoadError != null)
+            {
+                AppendStatus($"단축키 설정 문제: {_hotkeyController.LoadError} — 모든 전역 단축키를 끈 기본값으로 시작합니다. 원본 파일은 그대로 두거나 .bad 사본으로 보존합니다.");
+            }
+            var failed = _hotkeyController.Statuses
+                .Where(kv => kv.Value.State == HotkeyRegState.Failed)
+                .Select(kv => HotkeyActions.KoreanLabel(kv.Key))
+                .ToList();
+            if (failed.Count > 0)
+            {
+                AppendStatus($"전역 단축키 등록 실패: {string.Join(", ", failed)} — 다른 프로그램이 같은 조합을 사용 중일 수 있습니다. 버튼은 계속 사용할 수 있습니다.");
+            }
+        }
+        catch (Exception ex)
+        {
+            AppendStatus("전역 단축키 초기화 실패: " + ex.GetType().Name + " — 빠른 적용 버튼은 계속 사용할 수 있습니다.");
+        }
+    }
+
+    private void ShutdownHotkeys()
+    {
+        try { _hotkeyController?.Shutdown(); } catch { }
+        try { _hotkeyWindow?.Dispose(); } catch { }
+        _hotkeyWindow = null;
+    }
+
+    /// <summary>
+    /// WM_HOTKEY from our message-only window.
+    ///  - Ids we do not currently hold (e.g. queued just before the key was disabled) are ignored.
+    ///  - While the hotkey settings dialog is open, a registered combination is FORWARDED to the
+    ///    focused key-capture field instead of applying (RegisterHotKey swallows the key before the
+    ///    field would see it). Registrations are not touched, so Cancel / save failure keep them.
+    ///  - While ANY modal is open on this form (native MessageBox, WinForms ShowDialog, ...) the
+    ///    command is dropped — not queued — and counted as suppressed.
+    ///  - Otherwise the apply is deferred out of the window procedure via BeginInvoke and the modal
+    ///    check is repeated at execution time.
+    /// MOD_NOREPEAT means holding the key does not repeat; the in-progress guard prevents overlap.
+    /// </summary>
+    private void OnHotkeyMessage(int id)
+    {
+        if (_hotkeyController is null) return;
+        if (!HotkeyActions.TryFromRegistrationId(id, out var action)) return;
+        if (!_hotkeyController.IsRegistered(action)) return;
+
+        if (_hotkeyDialogOpen)
+        {
+            var b = _hotkeyController.Current.Get(action);
+            if (_openHotkeyDialog is { } dlg && dlg.TryForwardRegisteredCombo(b.Ctrl, b.Alt, b.Shift, b.Key))
+            {
+                _hotkeyForwardedCount++;
+                return;
+            }
+            NoteHotkeySuppressed(action, "단축키 설정 창이 열려 있음");
+            return;
+        }
+        if (IsExplicitApplyBlocked(out var why))
+        {
+            NoteHotkeySuppressed(action, why);
+            return;
+        }
+        _hotkeyInvocationCount++;
+        void Run()
+        {
+            // Re-check at execution time: a modal may have opened between receipt and dispatch.
+            if (IsExplicitApplyBlocked(out var whyLater))
+            {
+                NoteHotkeySuppressed(action, whyLater);
+                return;
+            }
+            ExecuteQuickAction(action, fromHotkey: true);
+        }
+        try
+        {
+            BeginInvoke(new Action(Run));
+        }
+        catch (InvalidOperationException)
+        {
+            Run();
+        }
+    }
+
+    /// <summary>
+    /// True while this form is owned by a modal UI. Native MessageBox/DialogBox and WinForms
+    /// ShowDialog disable the owner with EnableWindow, which the managed Enabled property does not
+    /// necessarily mirror, so the native IsWindowEnabled state is checked as well.
+    /// </summary>
+    private bool IsExplicitApplyBlocked(out string reason)
+    {
+        if (_hotkeyDialogOpen) { reason = "단축키 설정 창이 열려 있음"; return true; }
+        if (IsHandleCreated && !NativeMethods.IsWindowEnabled(Handle)) { reason = "확인/편집 창이 열려 있음"; return true; }
+        if (!Enabled) { reason = "확인/편집 창이 열려 있음"; return true; }
+        foreach (Form f in Application.OpenForms)
+        {
+            if (!ReferenceEquals(f, this) && f.Modal && f.Visible) { reason = "확인/편집 창이 열려 있음"; return true; }
+        }
+        if (_quickApplyInProgress) { reason = "이전 적용이 진행 중"; return true; }
+        reason = "";
+        return false;
+    }
+
+    private void NoteHotkeySuppressed(HotkeyActionId action, string reason)
+    {
+        _hotkeySuppressedCount++;
+        AppendStatus($"{HotkeyActions.KoreanLabel(action)} 단축키를 무시했습니다: {reason}. 창을 닫은 뒤 다시 누르세요.");
+    }
+
+    private QuickApplyResult ExecuteQuickAction(HotkeyActionId action, bool fromHotkey) => action switch
+    {
+        HotkeyActionId.Previous => PerformNavigateApply(next: false, fromHotkey),
+        HotkeyActionId.Next => PerformNavigateApply(next: true, fromHotkey),
+        _ => PerformSlotApply(HotkeyActions.SlotNumber(action), fromHotkey)
+    };
+
+    /// <summary>Same as clicking slot button n (1..8): applies the assigned profile even when its
+    /// global hotkey is disabled.</summary>
+    public QuickApplyResult PerformSlotApply(int slotNumber) => PerformSlotApply(slotNumber, fromHotkey: false);
+
+    private QuickApplyResult PerformSlotApply(int slotNumber, bool fromHotkey)
+    {
+        var action = HotkeyActions.FromSlotNumber(slotNumber);
+        var cfg = _hotkeyController?.Current ?? HotkeyConfig.CreateDefault();
+        return RunQuickApply(cfg.Get(action).ProfileId, $"슬롯 {slotNumber}", fromHotkey);
+    }
+
+    /// <summary>Same as clicking Previous/Next: next/previous over ALL saved layouts in list order.</summary>
+    public QuickApplyResult PerformNavigateApply(bool next) => PerformNavigateApply(next, fromHotkey: false);
+
+    private QuickApplyResult PerformNavigateApply(bool next, bool fromHotkey)
+    {
+        var label = next ? "다음 배치" : "이전 배치";
+        if (_quickApplyInProgress) return ReportQuickResult(QuickApplyResult.Of(QuickApplyOutcome.Busy), label, fromHotkey);
+        ReloadProfiles();
+        var ids = ProfileOrdering.Sort(_profilesCache).Select(p => p.Id).ToList();
+        var target = ProfileOrdering.ResolveNeighbor(ids, _monitor.ActiveProfile?.Id, _selectedProfile?.Id, next);
+        if (target is null) return ReportQuickResult(QuickApplyResult.Of(QuickApplyOutcome.NoProfiles), label, fromHotkey);
+        return RunQuickApply(target, label, fromHotkey);
+    }
+
+    private QuickApplyResult RunQuickApply(string? profileId, string label, bool fromHotkey)
+    {
+        if (_quickApplyInProgress) return ReportQuickResult(QuickApplyResult.Of(QuickApplyOutcome.Busy), label, fromHotkey);
+        _quickApplyInProgress = true;
+        try
+        {
+            QuickApplyResult result;
+            try
+            {
+                result = QuickApply.ApplyById(_profiles, _monitor, profileId);
+            }
+            catch (Exception ex)
+            {
+                result = QuickApplyResult.Of(QuickApplyOutcome.ProfileUnreadable, profileId, QuickApply.SafeMessage(ex));
+            }
+            if (result.Outcome == QuickApplyOutcome.Applied && result.ProfileId != null)
+            {
+                ReloadProfiles();
+                SelectProfileById(result.ProfileId);
+                UpdateHeader();
+                RefreshTrayMenu();
+                AppendApplyReports(result.Reports);
+            }
+            return ReportQuickResult(result, label, fromHotkey);
+        }
+        finally
+        {
+            _quickApplyInProgress = false;
+        }
+    }
+
+    private QuickApplyResult ReportQuickResult(QuickApplyResult r, string label, bool fromHotkey)
+    {
+        LastQuickApplyResult = r;
+        _quickApplyCount++;
+        int moved = r.Reports.Count(x => x.Result == PlaceResult.Moved);
+        int skipped = r.Reports.Count - moved;
+        string msg = r.Outcome switch
+        {
+            QuickApplyOutcome.Applied =>
+                $"{label} 적용: {r.ProfileName} — 이동 {moved}, 건너뜀 {skipped} — 자동 배치 켜짐" +
+                (r.Detail != null ? " (설정 저장 실패: 이번 실행 동안만 유지)" : ""),
+            QuickApplyOutcome.Unassigned => $"{label}: 아직 배치가 지정되지 않았습니다. '단축키 설정…'에서 저장된 배치를 지정하세요.",
+            QuickApplyOutcome.ProfileMissing => $"{label}: 지정된 배치를 찾을 수 없어(삭제됨) 아무것도 적용하지 않았습니다.",
+            QuickApplyOutcome.ProfileUnreadable => $"{label}: 지정된 배치 파일을 읽을 수 없어 아무것도 적용하지 않았습니다.",
+            QuickApplyOutcome.NoProfiles => $"{label}: 저장된 배치가 없습니다.",
+            QuickApplyOutcome.Busy => $"{label}: 이전 적용이 아직 진행 중이라 무시했습니다.",
+            _ => label
+        };
+        AppendStatus(msg);
+        if (fromHotkey && !Visible && !_suppressModalDialogs)
+        {
+            try { _tray.ShowBalloonTip(2500, "창자리 (WindowDock)", msg, ToolTipIcon.Info); } catch { }
+        }
+        RefreshQuickBar();
+        return r;
+    }
+
+    private void SelectProfileById(string id)
+    {
+        for (int i = 0; i < _profileList.Items.Count; i++)
+        {
+            if (((ProfileRow)_profileList.Items[i]!).Profile.Id == id)
+            {
+                _profileList.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    /// <summary>Slot labels + tooltips. Unassigned / missing slots explain what to do.</summary>
+    private void RefreshQuickBar()
+    {
+        if (_slotButtons[0] is null) return;
+        var cfg = _hotkeyController?.Current ?? HotkeyConfig.CreateDefault();
+        var statuses = _hotkeyController?.Statuses;
+        var names = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var p in _profilesCache) names[p.Id] = p.Name;
+
+        string KeyLine(HotkeyActionId a)
+        {
+            var b = cfg.Get(a);
+            string state = !b.Enabled
+                ? "꺼짐 (버튼은 그대로 사용 가능)"
+                : statuses != null && statuses.TryGetValue(a, out var s) ? s.KoreanText : "확인 전";
+            return $"전역 단축키 {HotkeyRules.Format(b)}: {state}";
+        }
+
+        for (int i = 0; i < HotkeyActions.SlotCount; i++)
+        {
+            var action = (HotkeyActionId)i;
+            var b = cfg.Get(action);
+            int n = i + 1;
+            string text, tip;
+            if (b.ProfileId is null)
+            {
+                text = $"{n}  (비어 있음)";
+                tip = $"슬롯 {n}: 아직 배치가 지정되지 않았습니다.\n'단축키 설정…'에서 저장된 배치를 지정하세요.\n{KeyLine(action)}";
+            }
+            else if (names.TryGetValue(b.ProfileId, out var nm))
+            {
+                text = $"{n}  {nm}";
+                tip = $"슬롯 {n}: {nm}\n누르면 이 배치를 바로 적용합니다 (이미 열린 창만 이동, 자동 배치 켜짐).\n{KeyLine(action)}";
+            }
+            else
+            {
+                text = $"{n}  (찾을 수 없음)";
+                tip = $"슬롯 {n}: 지정된 배치가 삭제되었거나 읽을 수 없습니다. 눌러도 아무것도 적용하지 않습니다.\n'단축키 설정…'에서 다시 지정하세요.\n{KeyLine(action)}";
+            }
+            _slotButtons[i].Text = text;
+            _slotButtons[i].AccessibleName = $"슬롯 {n}: " + text[(n.ToString().Length)..].Trim();
+            _quickTips.SetToolTip(_slotButtons[i], tip);
+        }
+        _quickTips.SetToolTip(_prevBtn, $"저장 목록 순서상 이전 배치를 바로 적용합니다 (처음에서 끝으로 순환).\n{KeyLine(HotkeyActionId.Previous)}");
+        _quickTips.SetToolTip(_nextBtn, $"저장 목록 순서상 다음 배치를 바로 적용합니다 (끝에서 처음으로 순환).\n{KeyLine(HotkeyActionId.Next)}");
+        _quickTips.SetToolTip(_hotkeySettingsBtn, "슬롯 1~8에 배치를 지정하고, 슬롯과 이전/다음의 전역 단축키를 켜거나 바꿉니다.");
+    }
+
+    private void DoHotkeySettings()
+    {
+        if (_hotkeyController is null)
+        {
+            NotifyError("전역 단축키 기능을 초기화하지 못했습니다. 프로그램을 다시 시작해 보세요.");
+            return;
+        }
+        ReloadProfiles();
+        using var dlg = new HotkeySettingsDialog(_hotkeyController.Current, ProfileOrdering.Sort(_profilesCache), _hotkeyController.Statuses);
+        DialogResult dr;
+        _hotkeyDialogOpen = true;
+        _openHotkeyDialog = dlg;
+        try { dr = dlg.ShowDialog(this); }
+        finally
+        {
+            _hotkeyDialogOpen = false;
+            _openHotkeyDialog = null;
+        }
+        if (dr != DialogResult.OK || dlg.ResultConfig is null)
+        {
+            AppendStatus("단축키 설정 변경을 취소했습니다. 이전 설정을 그대로 유지합니다.");
+            return;
+        }
+        var res = PerformHotkeyCommit(dlg.ResultConfig);
+        if (res.Outcome != HotkeyCommitOutcome.Applied)
+        {
+            NotifyError(string.Join("\n", res.Errors) + "\n\n이전 단축키 설정과 등록 상태를 그대로 유지합니다.");
+            return;
+        }
+        var failed = res.Statuses.Where(kv => kv.Value.State == HotkeyRegState.Failed).ToList();
+        if (failed.Count > 0)
+        {
+            NotifyInfo("설정은 저장했지만 다음 단축키는 등록하지 못했습니다:\n" +
+                       string.Join("\n", failed.Select(kv => $"- {HotkeyActions.KoreanLabel(kv.Key)}: {kv.Value.KoreanText}")) +
+                       "\n\n다른 조합으로 바꾸거나 해당 프로그램을 종료한 뒤 다시 저장하세요. 버튼은 계속 사용할 수 있습니다.");
+        }
+    }
+
+    /// <summary>
+    /// Saves the proposal first, then re-registers only changed keys. Invalid or failed save keeps
+    /// the previous in-memory config and every existing registration. Never applies a layout.
+    /// </summary>
+    public HotkeyCommitResult PerformHotkeyCommit(HotkeyConfig proposed)
+    {
+        HotkeyCommitResult res;
+        if (_hotkeyController is null)
+        {
+            res = new HotkeyCommitResult(HotkeyCommitOutcome.SaveFailed,
+                new[] { "전역 단축키 기능이 초기화되지 않았습니다." },
+                new Dictionary<HotkeyActionId, HotkeyStatus>());
+        }
+        else
+        {
+            res = _hotkeyController.Commit(proposed);
+        }
+        LastHotkeyCommitResult = res;
+        if (res.Outcome == HotkeyCommitOutcome.Applied)
+        {
+            int on = res.Statuses.Count(kv => kv.Value.State == HotkeyRegState.Registered);
+            int fail = res.Statuses.Count(kv => kv.Value.State == HotkeyRegState.Failed);
+            AppendStatus($"단축키 설정 저장됨: 등록된 단축키 {on}개" + (fail > 0 ? $", 등록 실패 {fail}개" : ""));
+        }
+        else
+        {
+            AppendStatus("단축키 설정을 적용하지 않았습니다: " + string.Join(" / ", res.Errors));
+        }
+        RefreshQuickBar();
+        return res;
     }
 
     private void TogglePauseResume()
@@ -734,6 +1188,7 @@ public sealed class MainForm : Form
             return;
         }
         _timer.Stop();
+        ShutdownHotkeys();
         _tray.Visible = false;
         _tray.Dispose();
     }
@@ -843,6 +1298,96 @@ public sealed class MainForm : Form
     public void UiSmokeSuppressDialogs(bool suppress) => _suppressModalDialogs = suppress;
     public bool UiSmokeTrayVisible => _tray.Visible;
     public bool UiSmokeTimerEnabled => _timer.Enabled;
+
+    // --- v0.2.0 quick apply / hotkey QA hooks ---
+    [System.ComponentModel.Browsable(false)]
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public QuickApplyResult? LastQuickApplyResult { get; private set; }
+
+    [System.ComponentModel.Browsable(false)]
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public HotkeyCommitResult? LastHotkeyCommitResult { get; private set; }
+
+    public HotkeyConfig? UiSmokeHotkeyConfig => _hotkeyController?.Current;
+    public IReadOnlyDictionary<HotkeyActionId, HotkeyStatus>? UiSmokeHotkeyStatuses => _hotkeyController?.Statuses;
+    public string? UiSmokeHotkeyLoadError => _hotkeyController?.LoadError;
+    /// <summary>Number of WM_HOTKEY messages accepted (registered id, not ignored).</summary>
+    public int UiSmokeHotkeyInvocationCount => _hotkeyInvocationCount;
+    /// <summary>Number of quick-apply results reported (buttons + hotkeys + navigation).</summary>
+    public int UiSmokeQuickApplyCount => _quickApplyCount;
+    /// <summary>SYNTHETIC only: posts WM_HOTKEY to our own message window (no OS keyboard routing).</summary>
+    public bool UiSmokePostSyntheticHotkey(HotkeyActionId action) =>
+        _hotkeyWindow?.PostSyntheticHotkey(HotkeyActions.RegistrationId(action)) ?? false;
+    public string UiSmokeSlotButtonText(int slotNumber) => _slotButtons[slotNumber - 1].Text;
+    public void UiSmokeClickSlot(int slotNumber) => _slotButtons[slotNumber - 1].PerformClick();
+    public void UiSmokeClickPrevious() => _prevBtn.PerformClick();
+    public void UiSmokeClickNext() => _nextBtn.PerformClick();
+    public IReadOnlyList<Button> UiSmokeQuickButtons =>
+        _slotButtons.Concat(new[] { _prevBtn, _nextBtn, _hotkeySettingsBtn }).ToList();
+    public IReadOnlyList<string> UiSmokeProfileListIds =>
+        _profileList.Items.Cast<ProfileRow>().Select(r => r.Profile.Id).ToList();
+
+    // --- v0.2.0 modal-reentrancy QA hooks (owned modals only; never touch other processes) ---
+    public int UiSmokeHotkeySuppressedCount => _hotkeySuppressedCount;
+    public int UiSmokeHotkeyForwardedCount => _hotkeyForwardedCount;
+    public HotkeySettingsDialog? UiSmokeOpenHotkeyDialog => _openHotkeyDialog;
+    /// <summary>Native owner-enabled state (MessageBox/ShowDialog disable the owner).</summary>
+    public bool UiSmokeOwnerEnabledNative => IsHandleCreated && NativeMethods.IsWindowEnabled(Handle);
+
+    [System.ComponentModel.Browsable(false)]
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool UiSmokeModalOpen { get; private set; }
+
+    private Form? _uiSmokeModal;
+
+    /// <summary>BLOCKING (call through BeginInvoke): owned WinForms modal on this form.</summary>
+    public void UiSmokeShowOwnedModalForm()
+    {
+        using var f = new Form
+        {
+            Text = "WindowDock QA modal",
+            ShowInTaskbar = false,
+            StartPosition = FormStartPosition.CenterParent,
+            Size = new Size(320, 160)
+        };
+        _uiSmokeModal = f;
+        f.Shown += (_, _) => UiSmokeModalOpen = true;
+        try { f.ShowDialog(this); }
+        finally
+        {
+            UiSmokeModalOpen = false;
+            _uiSmokeModal = null;
+        }
+    }
+
+    public void UiSmokeCloseOwnedModalForm() => _uiSmokeModal?.Close();
+
+    /// <summary>BLOCKING (call through BeginInvoke): native Win32 MessageBox owned by this form.</summary>
+    public void UiSmokeShowNativeMessageBox()
+    {
+        UiSmokeModalOpen = true;
+        try { MessageBox.Show(this, "창자리 QA 확인 창 (자동으로 닫힘)", "QA", MessageBoxButtons.OK); }
+        finally { UiSmokeModalOpen = false; }
+    }
+
+    /// <summary>Closes only #32770 dialogs on THIS UI thread whose owner is this form.</summary>
+    public int UiSmokeCloseOwnedNativeDialogs()
+    {
+        if (!IsHandleCreated) return 0;
+        var owner = Handle;
+        var found = new List<IntPtr>();
+        NativeMethods.EnumThreadWindows(NativeMethods.GetCurrentThreadId(), (h, _) =>
+        {
+            if (NativeMethods.GetWindow(h, NativeMethods.GW_OWNER) == owner && WindowEnumerator.ReadClassName(h) == "#32770")
+                found.Add(h);
+            return true;
+        }, IntPtr.Zero);
+        foreach (var h in found) NativeMethods.PostMessageW(h, NativeMethods.WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+        return found.Count;
+    }
+
+    /// <summary>BLOCKING (call through BeginInvoke): the real hotkey settings dialog.</summary>
+    public void UiSmokeOpenHotkeySettings() => DoHotkeySettings();
 
     private sealed class ProfileRow
     {

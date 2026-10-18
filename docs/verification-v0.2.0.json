@@ -1,0 +1,303 @@
+{
+  "version": "0.2.0",
+  "date": "2026-10-18",
+  "platform": "Windows x64; one physical 5120x1440 display",
+  "executableSha256": "81B7C88F75C0BA119F8D1E61E67BD814106CF1EBE93FF97618EBFBAB9AF5BDC0",
+  "sourceAuthorship": "Claude Code",
+  "independentBuildAndReview": "Codex",
+  "selfTest": {
+    "passed": 90,
+    "total": 90
+  },
+  "independentHotkeyProbe": {
+    "passed": 10,
+    "cases": [
+      {
+        "name": "defaults-safe",
+        "ok": true
+      },
+      {
+        "name": "duplicate-root",
+        "ok": true
+      },
+      {
+        "name": "duplicate-binding",
+        "ok": true
+      },
+      {
+        "name": "bad-boolean",
+        "ok": true
+      },
+      {
+        "name": "bad-key",
+        "ok": true
+      },
+      {
+        "name": "locked-save-preserves-registration-and-disk",
+        "ok": true
+      },
+      {
+        "name": "duplicate-enabled-rejected-before-save",
+        "ok": true
+      },
+      {
+        "name": "settings-isolation",
+        "ok": true
+      },
+      {
+        "name": "native-collision-and-release",
+        "ok": true
+      },
+      {
+        "name": "stable-order-and-all-layout-navigation",
+        "ok": true
+      }
+    ],
+    "total": 10
+  },
+  "hotkeySmoke": {
+    "registrationsReleased": true,
+    "defaultAndMinimumDialogLayout": true,
+    "startupMoves": 0,
+    "configCommitMoves": 0,
+    "ok": true,
+    "steps": [
+      {
+        "name": "synthetic_slot1",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "synthetic_next_tie",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "synthetic_next",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "synthetic_next_wrap",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "synthetic_previous_wrap",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "synthetic_disabled_slot2_ignored",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "button_slot2_unassigned",
+        "kind": "button_click",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "button_slot3_deleted",
+        "kind": "button_click",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "button_slot4_corrupt",
+        "kind": "button_click",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "button_previous",
+        "kind": "button_click",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "button_next",
+        "kind": "button_click",
+        "pass": true,
+        "movesDelta": 1
+      },
+      {
+        "name": "hotkey_during_winforms_modal",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "hotkey_during_native_messagebox",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "settings_dialog_capture_registered_key",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 0
+      },
+      {
+        "name": "synthetic_slot1_after_failed_save",
+        "kind": "synthetic_wm_hotkey",
+        "pass": true,
+        "movesDelta": 1
+      }
+    ],
+    "lockedCommitPreserved": true,
+    "osKeyboardRouting": "not requested in this synthetic harness"
+  },
+  "ui": {
+    "passedPhases": 15,
+    "scopeViolations": 0
+  },
+  "tray": {
+    "monitoringOffCasePassed": true,
+    "monitoringOnCasePassed": true,
+    "startupMoves": 0
+  },
+  "native": {
+    "passed": 24,
+    "steps": [
+      {
+        "name": "spawn_and_enumerate",
+        "status": "passed"
+      },
+      {
+        "name": "save_profile",
+        "status": "passed"
+      },
+      {
+        "name": "apply",
+        "status": "passed"
+      },
+      {
+        "name": "apply_enables_monitoring",
+        "status": "passed"
+      },
+      {
+        "name": "verify_positions",
+        "status": "passed"
+      },
+      {
+        "name": "no_focus_steal",
+        "status": "passed"
+      },
+      {
+        "name": "manual_move_retained_without_reprime",
+        "status": "passed"
+      },
+      {
+        "name": "close_one_survivors_untouched",
+        "status": "passed"
+      },
+      {
+        "name": "monitoring_still_on_before_spawn",
+        "status": "passed"
+      },
+      {
+        "name": "auto_place_new_window",
+        "status": "passed"
+      },
+      {
+        "name": "manual_move_after_auto_place_without_reprime",
+        "status": "passed"
+      },
+      {
+        "name": "paused_no_auto_move",
+        "status": "passed"
+      },
+      {
+        "name": "hidden_fixture_shown_not_treated_as_new",
+        "status": "passed"
+      },
+      {
+        "name": "capture_maximized_normal_rect",
+        "status": "passed"
+      },
+      {
+        "name": "restore_from_maximized_to_changed_size",
+        "status": "passed"
+      },
+      {
+        "name": "capture_minimized_normal_rect",
+        "status": "passed"
+      },
+      {
+        "name": "restore_from_minimized_to_changed_size",
+        "status": "passed"
+      },
+      {
+        "name": "constrained_size_rejected_truthfully",
+        "status": "passed"
+      },
+      {
+        "name": "verified_maximize_operation",
+        "status": "passed"
+      },
+      {
+        "name": "different_owned_foreground_focus_observation",
+        "status": "not_established"
+      },
+      {
+        "name": "hidden_A_reserves_competing_B_skipped_cold_start",
+        "status": "passed"
+      },
+      {
+        "name": "hidden_A_reserves_competing_B_skipped_resume",
+        "status": "passed"
+      },
+      {
+        "name": "hidden_A_reserves_competing_B_skipped_explicit_apply",
+        "status": "passed"
+      },
+      {
+        "name": "foreign_hung_fixture_enumerated_bounded",
+        "status": "passed"
+      },
+      {
+        "name": "mutation_scope",
+        "status": "passed"
+      }
+    ],
+    "scopeViolations": 0,
+    "notEstablished": 1
+  },
+  "actualKeyboard": {
+    "scopeViolations": 0,
+    "host": "Independent isolated host using the production MainForm and native provider",
+    "settingsRegisteredKeyForwarding": true,
+    "newKeyCapture": "Ctrl+Alt+Shift+F11 captured and accepted by the actual dialog in a standalone UI host",
+    "cancelNoMoves": true,
+    "slotsAndNavigation": 4,
+    "hiddenMainForm": true
+  },
+  "hangRegression": {
+    "fixedMilliseconds": 34,
+    "foreignHungMetadataMs": 14,
+    "foreignHungWindowEnumerationMs": 12,
+    "oldMilliseconds": 3555
+  },
+  "installedApp": {
+    "logonTaskUpdated": true,
+    "positionSizeStateChanges": 0,
+    "existingDataFilesUnchanged": true,
+    "nativeHealthFailures": 0,
+    "existingWindowsCompared": 14
+  },
+  "limitations": [
+    "No PC reboot or logoff performed",
+    "Mixed DPI and multiple physical displays not physically tested",
+    "Elevated applications not generally validated",
+    "Separate owned foreground-window observation not established due to Windows foreground restriction"
+  ]
+}
