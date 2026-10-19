@@ -17,7 +17,7 @@ jobs:
       - name: Real window manager and GTK integration
         run: |
           mkdir -p artifacts/checks
-          xvfb-run -a -s '-screen 0 1920x1080x24' sh -c 'openbox >artifacts/checks/openbox.log 2>&1 & sleep 2; XDG_SESSION_TYPE=x11 PYTHONPATH=linux /usr/bin/python3 linux/tests/native_smoke.py --output artifacts/checks/linux-native.json --screenshot artifacts/checks/linux-ui.png'
+          dbus-run-session -- xvfb-run -a -s '-screen 0 1920x1080x24' sh -c 'openbox >artifacts/checks/openbox.log 2>&1 & sleep 2; XDG_SESSION_TYPE=x11 PYTHONPATH=linux /usr/bin/python3 linux/tests/native_smoke.py --output artifacts/checks/linux-native.json --screenshot artifacts/checks/linux-ui.png'
       - name: Package Linux
         run: /usr/bin/python3 scripts/package_linux.py
       - uses: actions/upload-artifact@v4

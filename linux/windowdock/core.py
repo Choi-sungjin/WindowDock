@@ -14,6 +14,10 @@ def uid():
     return str(uuid.uuid4())
 
 
+def data_path(root=None):
+    return Path(root or Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "WindowDock").expanduser().resolve()
+
+
 def valid_id(value):
     try:
         return isinstance(value, str) and str(uuid.UUID(value)) == value
@@ -62,7 +66,7 @@ def validate_settings(s):
 
 class Store:
     def __init__(self, root=None):
-        self.root = Path(root or Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "WindowDock")
+        self.root = data_path(root)
         self.profiles = self.root / "profiles"
         self.profiles.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.errors = []

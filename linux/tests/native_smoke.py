@@ -81,7 +81,17 @@ def main():
         command(p3, op="quit"); p3.wait(timeout=5); pump(0.1)
         max_entry = copy.deepcopy(e); max_entry["maximized"] = True
         check("maximize_and_verify", backend.move(current(w2), max_entry) == "moved" and current(w2)["maximized"])
-        check("restore_from_maximized", backend.move(current(w2), e) == "moved" and not current(w2)["maximized"])
+        restore_result = backend.move(current(w2), e)
+        if restore_result != "moved":
+            from gi.repository import Gdk, GdkX11
+            foreign = GdkX11.X11Window.foreign_new_for_display(Gdk.Display.get_default(), w2["identity"][0])
+            actual_frame = foreign.get_frame_extents()
+            print("RESTORE DIAGNOSTIC", json.dumps(dict(outcome=restore_result, requested=e["rect"], actual=current(w2)["rect"], xserver=dict(x=actual_frame.x,y=actual_frame.y,w=actual_frame.width,h=actual_frame.height), maximized=current(w2)["maximized"])), flush=True)
+        check("restore_from_maximized", restore_result == "moved" and not current(w2)["maximized"])
+        from gi.repository import Gdk, GdkX11
+        frame = GdkX11.X11Window.foreign_new_for_display(Gdk.Display.get_default(), w2["identity"][0]).get_frame_extents()
+        server_rect = dict(x=frame.x, y=frame.y, w=frame.width, h=frame.height)
+        check("restored_geometry_independently_read_from_xserver", all(abs(server_rect[k] - e["rect"][k]) <= 2 for k in e["rect"]))
         stale = copy.deepcopy(w2); stale["identity"] = (w2["identity"][0], w2["identity"][1], "wrong-start")
         check("stale_identity_rejected", backend.move(stale, e) == "stale")
         monitor.prime(profile, False)
@@ -91,10 +101,19 @@ def main():
         with tempfile.TemporaryDirectory(prefix="windowdock-ui-") as temp:
             from windowdock.app import Application
             from gi.repository import Gdk
-            store = Store(temp); store.save(profile)
-            app = Application(temp)
+            data_dir = Path(temp) / "WindowDock"
+            store = Store(data_dir); store.save(profile)
+            app = Application(data_dir)
             app.register(None); app.activate(); pump(0.25)
             check("gui_loads_saved_profile", app.selected()["id"] == profile["id"])
+            duplicate = subprocess.Popen([sys.executable, str(Path(__file__).resolve().parents[1] / "launch.py")],
+                                         env=dict(os.environ, XDG_DATA_HOME=temp), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            processes.append(duplicate)
+            for _ in range(50):
+                pump(0.05)
+                if duplicate.poll() is not None:
+                    break
+            check("implicit_and_explicit_data_dir_share_instance", duplicate.poll() == 0 and len(app.get_windows()) == 1)
             before = current(w2)["rect"]
             app.buttons["active"].clicked(); pump(0.1)
             check("active_button_does_not_move", current(w2)["rect"] == before)

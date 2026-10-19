@@ -5,19 +5,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 import sys
 
-from .core import Store, Monitor, profile_from_windows, resolve
+from .core import Store, Monitor, data_path, profile_from_windows, resolve
 from .native import Backend
 from gi.repository import Gtk, Gio, GLib
 
 
+def instance_id(data_dir=None):
+    # Implicit default, explicit default and symlink aliases share one owner.
+    return "io.github.ChoiSungjin.WindowDock.d" + hashlib.sha256(str(data_path(data_dir)).encode()).hexdigest()[:16]
+
+
 class Application(Gtk.Application):
     def __init__(self, data_dir=None, start_in_tray=False):
-        application_id = "io.github.ChoiSungjin.WindowDock"
-        if data_dir:
-            # An explicitly isolated data directory must never forward test UI
-            # operations to the user's already-running default instance.
-            application_id += ".d" + hashlib.sha256(str(Path(data_dir).resolve()).encode()).hexdigest()[:16]
-        super().__init__(application_id=application_id, flags=Gio.ApplicationFlags.FLAGS_NONE)
+        super().__init__(application_id=instance_id(data_dir), flags=Gio.ApplicationFlags.FLAGS_NONE)
         self.store = Store(data_dir)
         self.settings = self.store.settings()
         self.backend = Backend()

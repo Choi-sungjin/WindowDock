@@ -1,0 +1,193 @@
+{
+  "version": "0.3.0",
+  "unitTests": {
+    "total": 35,
+    "passed": 35
+  },
+  "nativeRuns": [
+    {
+      "platform": "Linux X11",
+      "windowManager": "GNOME Shell",
+      "total": 21,
+      "passed": 21,
+      "checks": [
+        {
+          "name": "startup_does_not_move_existing_window",
+          "passed": true
+        },
+        {
+          "name": "manual_apply_reports_real_geometry",
+          "passed": true
+        },
+        {
+          "name": "actual_frame_position_and_size",
+          "passed": true
+        },
+        {
+          "name": "manual_move_retained",
+          "passed": true
+        },
+        {
+          "name": "reopened_window_placed_once",
+          "passed": true
+        },
+        {
+          "name": "second_tick_does_not_move",
+          "passed": true
+        },
+        {
+          "name": "minimized_owner_reserves_slot",
+          "passed": true
+        },
+        {
+          "name": "duplicate_candidates_skipped",
+          "passed": true
+        },
+        {
+          "name": "maximize_and_verify",
+          "passed": true
+        },
+        {
+          "name": "restore_from_maximized",
+          "passed": true
+        },
+        {
+          "name": "restored_geometry_independently_read_from_xserver",
+          "passed": true
+        },
+        {
+          "name": "stale_identity_rejected",
+          "passed": true
+        },
+        {
+          "name": "pause_keeps_geometry",
+          "passed": true
+        },
+        {
+          "name": "gui_loads_saved_profile",
+          "passed": true
+        },
+        {
+          "name": "implicit_and_explicit_data_dir_share_instance",
+          "passed": true
+        },
+        {
+          "name": "active_button_does_not_move",
+          "passed": true
+        },
+        {
+          "name": "gui_apply_button_moves_fixture",
+          "passed": true
+        },
+        {
+          "name": "slot_assignment_persisted",
+          "passed": true
+        },
+        {
+          "name": "slot_button_applies",
+          "passed": true
+        },
+        {
+          "name": "pause_button_persisted",
+          "passed": true
+        },
+        {
+          "name": "fixtures_only_no_user_windows_targeted",
+          "passed": true
+        }
+      ]
+    },
+    {
+      "platform": "Linux X11",
+      "windowManager": "Openbox",
+      "total": 21,
+      "passed": 21,
+      "checks": [
+        {
+          "name": "startup_does_not_move_existing_window",
+          "passed": true
+        },
+        {
+          "name": "manual_apply_reports_real_geometry",
+          "passed": true
+        },
+        {
+          "name": "actual_frame_position_and_size",
+          "passed": true
+        },
+        {
+          "name": "manual_move_retained",
+          "passed": true
+        },
+        {
+          "name": "reopened_window_placed_once",
+          "passed": true
+        },
+        {
+          "name": "second_tick_does_not_move",
+          "passed": true
+        },
+        {
+          "name": "minimized_owner_reserves_slot",
+          "passed": true
+        },
+        {
+          "name": "duplicate_candidates_skipped",
+          "passed": true
+        },
+        {
+          "name": "maximize_and_verify",
+          "passed": true
+        },
+        {
+          "name": "restore_from_maximized",
+          "passed": true
+        },
+        {
+          "name": "restored_geometry_independently_read_from_xserver",
+          "passed": true
+        },
+        {
+          "name": "stale_identity_rejected",
+          "passed": true
+        },
+        {
+          "name": "pause_keeps_geometry",
+          "passed": true
+        },
+        {
+          "name": "gui_loads_saved_profile",
+          "passed": true
+        },
+        {
+          "name": "implicit_and_explicit_data_dir_share_instance",
+          "passed": true
+        },
+        {
+          "name": "active_button_does_not_move",
+          "passed": true
+        },
+        {
+          "name": "gui_apply_button_moves_fixture",
+          "passed": true
+        },
+        {
+          "name": "slot_assignment_persisted",
+          "passed": true
+        },
+        {
+          "name": "slot_button_applies",
+          "passed": true
+        },
+        {
+          "name": "pause_button_persisted",
+          "passed": true
+        },
+        {
+          "name": "fixtures_only_no_user_windows_targeted",
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

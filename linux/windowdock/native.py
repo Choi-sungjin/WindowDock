@@ -78,14 +78,19 @@ class Backend:
             return "fullscreen-skipped"
         win.unminimize(0)
         win.unmaximize()
-        mask = Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT
-        # Move and verify asynchronously delivered WM requests, bounded to 0.8s.
+        size_mask = Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT
+        position_mask = Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y
+        # Bound all waits and verify asynchronously delivered WM requests.
         pump(0.08)
-        win.set_geometry(Wnck.WindowGravity.STATIC, mask, target["x"], target["y"], target["w"], target["h"])
-        for _ in range(15):
+        self.screen.force_update()
+        current = self.metadata(win) if win in self.screen.get_windows() else None
+        if not current or current["identity"] != original["identity"]:
+            return "stale"
+        win.set_geometry(Wnck.WindowGravity.STATIC, size_mask | position_mask, target["x"], target["y"], target["w"], target["h"])
+        for attempt in range(15):
             pump(0.04)
             self.screen.force_update()
-            actual = self.metadata(win)
+            actual = self.metadata(win) if win in self.screen.get_windows() else None
             if not actual or actual["identity"] != original["identity"]:
                 return "stale"
             if all(abs(actual["rect"][k] - target[k]) <= 2 for k in target) and not win.is_minimized():
@@ -99,4 +104,20 @@ class Backend:
                     return "rejected"
                 if not win.is_maximized_horizontally() and not win.is_maximized_vertically():
                     return "moved"
+            if attempt == 4 and not win.is_maximized() and not win.is_minimized():
+                # Openbox can leave a frame-sized offset after unmaximizing and
+                # suppress a repeated identical request. A single 1px transition
+                # clears that case; final exact geometry is still mandatory.
+                dx, dy = actual["rect"]["x"] - target["x"], actual["rect"]["y"] - target["y"]
+                if dx or dy:
+                    cx, cy, _, _ = win.get_client_window_geometry()
+                    left, top = cx - actual["rect"]["x"], cy - actual["rect"]["y"]
+                    if abs(dx) == abs(left) and abs(dy) == abs(top):
+                        win.set_geometry(Wnck.WindowGravity.STATIC, position_mask, target["x"] + 1, target["y"] + 1, target["w"], target["h"])
+                        pump(0.06)
+                        self.screen.force_update()
+                        current = self.metadata(win) if win in self.screen.get_windows() else None
+                        if not current or current["identity"] != original["identity"]:
+                            return "stale"
+                        win.set_geometry(Wnck.WindowGravity.STATIC, position_mask, target["x"], target["y"], target["w"], target["h"])
         return "rejected"
