@@ -1,0 +1,66 @@
+name: Build and verify Windows and Linux
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install desktop test dependencies
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-gtk-3.0 gir1.2-wnck-3.0 xvfb openbox
+      - name: Core tests
+        run: PYTHONPATH=linux /usr/bin/python3 -m unittest discover -s linux/tests -p 'test_*.py' -v
+      - name: Real window manager and GTK integration
+        run: |
+          mkdir -p artifacts/checks
+          xvfb-run -a -s '-screen 0 1920x1080x24' sh -c 'openbox >artifacts/checks/openbox.log 2>&1 & sleep 2; XDG_SESSION_TYPE=x11 PYTHONPATH=linux /usr/bin/python3 linux/tests/native_smoke.py --output artifacts/checks/linux-native.json --screenshot artifacts/checks/linux-ui.png'
+      - name: Package Linux
+        run: /usr/bin/python3 scripts/package_linux.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: dist/WindowDock-*-linux-x64.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-checks
+          path: artifacts/checks/
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build and self-test
+        shell: pwsh
+        run: |
+          dotnet build src/WindowLayoutManager/WindowLayoutManager.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
+          New-Item -ItemType Directory -Force artifacts/checks | Out-Null
+          dotnet src/WindowLayoutManager/bin/Release/net10.0-windows/WindowLayoutManager.dll --self-test --output artifacts/checks/windows-self-test.json
+          if ($LASTEXITCODE -ne 0) { throw 'Self-test failed' }
+      - name: Publish Windows
+        shell: pwsh
+        run: |
+          dotnet publish src/WindowLayoutManager/WindowLayoutManager.csproj -c Release -r win-x64 --self-contained true -p:DebugType=none -p:DebugSymbols=false -p:IncludeSourceRevisionInInformationalVersion=false -o artifacts/publish
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed' }
+          New-Item -ItemType Directory -Force dist, artifacts/package/WindowDock-v0.3.0-win-x64 | Out-Null
+          Copy-Item artifacts/publish/WindowLayoutManager.exe artifacts/package/WindowDock-v0.3.0-win-x64/
+          Copy-Item README.md, CHANGELOG.md artifacts/package/WindowDock-v0.3.0-win-x64/
+          New-Item -ItemType Directory -Force artifacts/package/WindowDock-v0.3.0-win-x64/docs | Out-Null
+          Copy-Item docs/*.md artifacts/package/WindowDock-v0.3.0-win-x64/docs/
+          Compress-Archive artifacts/package/WindowDock-v0.3.0-win-x64 dist/WindowDock-v0.3.0-win-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: dist/WindowDock-*-win-x64.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-checks
+          path: artifacts/checks/

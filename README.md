@@ -2,9 +2,22 @@
 
 **창마다 원하는 자리를 저장하고, 다시 열면 그 자리에.**
 
-여러 프로그램 창의 위치와 크기를 배치별로 저장하는 Windows 트레이 앱입니다. 버튼으로 배치를 전환하고, 이후 새로 열린 창은 저장된 자리에 한 번 자동 배치합니다.
+여러 프로그램 창의 위치와 크기를 배치별로 저장하는 Windows / Linux 앱입니다. 버튼으로 배치를 전환하고, 이후 새로 열린 창은 저장된 자리에 한 번 자동 배치합니다.
 
 [실행 파일 다운로드](https://github.com/Choi-sungjin/WindowDock/releases/latest) · [사용법](docs/사용법.md) · [검증 범위](docs/검증.md)
+
+## 운영체제별 다운로드 · v0.3.0
+
+| 운영체제 | 다운로드 파일 | 시작 방법 |
+| --- | --- | --- |
+| Windows x64 | [WindowDock-v0.3.0-win-x64.zip](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.0/WindowDock-v0.3.0-win-x64.zip) | 압축 해제 후 `WindowLayoutManager.exe` 실행 |
+| Linux x64 · Ubuntu 24.04 X11 | [WindowDock-v0.3.0-linux-x64.tar.gz](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.0/WindowDock-v0.3.0-linux-x64.tar.gz) | 압축 해제 후 `./install.sh`, 앱 메뉴에서 창자리 실행 |
+
+**Linux 설치·사용법은 [Linux 안내](docs/Linux.md)를 먼저 보세요.** GTK 3·libwnck 3·시스템 Python이 필요합니다. Wayland와 Linux 전역 단축키는 지원하지 않습니다. Linux는 8개 슬롯 버튼과 이전·다음 버튼으로 배치를 적용하며, 트레이가 없으면 창 닫기로 종료됩니다. 아래 영상·스크린샷과 전역 단축키 설명은 Windows 버전 기준입니다.
+
+![Linux 관리 화면 — 일회용 시험 창으로 검사한 배치](docs/images/windowdock-linux.png)
+
+*Linux 실제 GTK 화면입니다. 개인 배치는 포함하지 않았습니다. 아래 영상은 Windows 버전입니다.*
 
 **실제 동작 영상 · 수퍼톤 한국어 설명 · 1분 24초**
 
@@ -25,11 +38,11 @@
 
 </details>
 
-## 시작하기
+## Windows 시작하기
 
 처음 사용하는 PC에서는 **빈 배치 목록**으로 시작합니다. 개인 배치는 다운로드에 포함되지 않으므로, 자신의 창을 배치한 다음 직접 등록하세요. 기존 PC에서 업데이트하거나 다시 내려받으면 로컬에 저장한 배치는 유지됩니다.
 
-1. Releases에서 **WindowDock-v0.2.0-win-x64.zip**을 받아 원하는 폴더에 압축을 풉니다.
+1. Releases에서 **WindowDock-v0.3.0-win-x64.zip**을 받아 원하는 폴더에 압축을 풉니다.
 2. **WindowLayoutManager.exe**를 실행합니다. 설치 프로그램이나 별도의 .NET 런타임은 필요하지 않습니다.
 3. 창들을 원하는 위치와 크기로 놓고 **현재 창에서 새로 저장**을 누릅니다.
 4. 포함할 창과 배치 이름을 정한 뒤 저장합니다.
@@ -73,6 +86,8 @@
 
 ## 저장 데이터와 호환성
 
+아래는 Windows 저장 위치입니다. Linux는 `~/.local/share/WindowDock/`(또는 `$XDG_DATA_HOME/WindowDock/`)을 사용하며 두 플랫폼의 개인 배치는 자동으로 공유하지 않습니다.
+
 - 배치: `%APPDATA%\WindowLayoutManager\profiles\`
 - 활성 배치와 감시 설정: `%APPDATA%\WindowLayoutManager\settings.json`
 - 슬롯과 단축키 설정: `%APPDATA%\WindowLayoutManager\hotkeys.json`
@@ -81,6 +96,8 @@
 - 개인 배치는 각 PC의 위 저장 폴더에만 남습니다. 다른 사용자의 배치를 기본값으로 제공하지 않습니다.
 
 ## 소스에서 빌드하기
+
+Linux는 컴파일 없이 `./linux/launch.sh`로 실행하고 `./linux/install.sh`로 설치합니다. 검사·패키징 명령은 [Linux 안내](docs/Linux.md#검증-명령)에 있습니다. 다음은 Windows 빌드 방법입니다.
 
 Windows와 **.NET 10 SDK**가 필요합니다. 외부 NuGet 패키지 없이 Windows Forms와 Win32 API를 사용합니다.
 
@@ -114,6 +131,9 @@ src/WindowLayoutManager/
   Model/      배치·창 정보 모델
   Cli/        명령행 기능과 검사 도구
 docs/         사용법과 검증 범위
+linux/        Python·GTK·Wnck 기반 Linux X11 앱, 설치기와 검사
+scripts/      Linux 배포 파일 생성
+.github/      Windows/Linux 빌드 및 자동 검사
 media/        README 설명 GIF의 Remotion 소스
 ```
 

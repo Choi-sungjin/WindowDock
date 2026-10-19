@@ -43,3 +43,9 @@ media/**/.remotion/
 # Local shortcut assignments
 hotkeys.json
 corrupt/
+
+# Linux runtime and release archives
+__pycache__/
+*.py[cod]
+.venv/
+*.tar.gz
