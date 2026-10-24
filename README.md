@@ -10,10 +10,10 @@
 
 | 운영체제 | 다운로드 파일 | 시작 방법 |
 | --- | --- | --- |
-| Windows x64 | [WindowDock-v0.3.1-win-x64.zip](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.1/WindowDock-v0.3.1-win-x64.zip) | 압축 해제 후 `WindowLayoutManager.exe` 실행 |
+| Windows x64 | [WindowDock-v0.3.2-win-x64.zip](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.2/WindowDock-v0.3.2-win-x64.zip) | 압축 해제 후 `WindowLayoutManager.exe` 실행 |
 | Linux x64 · Ubuntu 24.04 X11 | [WindowDock-v0.3.0-linux-x64.tar.gz](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.0/WindowDock-v0.3.0-linux-x64.tar.gz) | 압축 해제 후 `./install.sh`, 앱 메뉴에서 창자리 실행 |
 
-Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기를 다시 열면 관리 화면을 보여 줍니다. **단축키 설정…**은 관리 화면 상단과 트레이 메뉴에서 열 수 있습니다. 슬롯에 배치를 연결하고 원하는 키를 지정한 뒤 켜 주세요. 기본값은 모두 꺼짐입니다.
+Windows v0.3.2는 글꼴·버튼 높이·간격을 통일하고 배치 관리 버튼을 정렬했습니다. 상단에는 **8개 슬롯**, 그 아래에는 **이전·다음 배치와 단축키 설정**을 모았습니다. **단축키 설정…**은 트레이 메뉴에서도 열 수 있습니다. 슬롯에 배치를 연결하고 원하는 키를 지정한 뒤 켜 주세요. 기본값은 모두 꺼짐입니다.
 
 **Linux 설치·사용법은 [Linux 안내](docs/Linux.md)를 먼저 보세요.** GTK 3·libwnck 3·시스템 Python이 필요합니다. Wayland와 Linux 전역 단축키는 지원하지 않습니다. Linux는 8개 슬롯 버튼과 이전·다음 버튼으로 배치를 적용하며, 트레이가 없으면 창 닫기로 종료됩니다. 아래 영상·스크린샷과 전역 단축키 설명은 Windows 버전 기준입니다.
 
@@ -34,7 +34,7 @@ Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기�
 <details>
 <summary>실제 앱 화면 보기</summary>
 
-![창자리 관리 화면](docs/images/windowdock.png)
+![창자리 v0.3.2 관리 화면](docs/images/windowdock-main-v0.3.2.png)
 
 시험용 창 3개로 확인한 실제 화면입니다. 개인 배치 데이터는 포함하지 않았습니다.
 
@@ -44,7 +44,7 @@ Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기�
 
 처음 사용하는 PC에서는 **빈 배치 목록**으로 시작합니다. 개인 배치는 다운로드에 포함되지 않으므로, 자신의 창을 배치한 다음 직접 등록하세요. 기존 PC에서 업데이트하거나 다시 내려받으면 로컬에 저장한 배치는 유지됩니다.
 
-1. Releases에서 **WindowDock-v0.3.0-win-x64.zip**을 받아 원하는 폴더에 압축을 풉니다.
+1. Releases에서 **WindowDock-v0.3.2-win-x64.zip**을 받아 원하는 폴더에 압축을 풉니다.
 2. **WindowLayoutManager.exe**를 실행합니다. 설치 프로그램이나 별도의 .NET 런타임은 필요하지 않습니다.
 3. 창들을 원하는 위치와 크기로 놓고 **현재 창에서 새로 저장**을 누릅니다.
 4. 포함할 창과 배치 이름을 정한 뒤 저장합니다.
@@ -64,7 +64,7 @@ Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기�
 
 단축키 설정에서 배치 지정, 키 변경, 개별 켜기·끄기가 가능합니다. 처음에는 단축키가 모두 꺼져 있고 슬롯도 비어 있습니다. 설정하거나 앱을 시작하는 것만으로 기존 창을 이동하지 않습니다. **적용 버튼 또는 켠 단축키를 누르면 현재 창을 배치하고 자동 감시를 시작합니다.** [자세한 사용법](docs/사용법.md#배치-슬롯과-단축키)
 
-![슬롯과 단축키 설정 화면 — 시험용 배치 예시](docs/images/windowdock-hotkeys-v0.3.1.png)
+![슬롯과 단축키 설정 화면 — 시험용 배치 예시](docs/images/windowdock-hotkeys-v0.3.2.png)
 
 ## 어떻게 동작하나요?
 
@@ -78,7 +78,7 @@ Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기�
 | 창자리를 다시 실행함 | 기존 창을 이동하지 않고 저장된 활성 배치·감시 상태 복원 |
 | 후보 창이 여러 개라 구분할 수 없음 | 임의로 배치하지 않고 결과에 표시 |
 
-같은 프로그램의 여러 창은 **항목 편집(세부) → 타이틀 포함**으로 구분할 수 있습니다. 모니터 해상도·입력·PBP 설정은 변경하지 않습니다.
+같은 프로그램의 여러 창은 **항목 편집 → 타이틀 포함**으로 구분할 수 있습니다. 모니터 해상도·입력·PBP 설정은 변경하지 않습니다.
 
 ## 트레이와 로그인 자동 실행
 

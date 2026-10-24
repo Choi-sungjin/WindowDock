@@ -22,23 +22,39 @@ public sealed class WindowPickerDialog : Form
     public WindowPickerDialog(IWindowProvider provider, IReadOnlyList<WindowInfo> initialWindows, string suggestedName, bool nameEditable = true)
     {
         _provider = provider;
+        SuspendLayout();
+        UiStyle.ApplyForm(this);
         Text = "현재 창에서 배치 저장";
         Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the dialog
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(880, 540);
         Size = new Size(980, 640);
-        Font = new Font("Segoe UI", 9f);
+        ShowInTaskbar = false;
 
-        var top = new Panel { Dock = DockStyle.Top, Height = 68, Padding = new Padding(10, 8, 10, 4) };
-        var lbl = new Label { Text = "배치 이름:", AutoSize = true, Location = new Point(10, 14) };
-        _nameBox = new TextBox { Location = new Point(90, 10), Width = 400, Text = suggestedName, Enabled = nameEditable };
-        _refreshBtn = new Button { Text = "현재 창 다시 읽기", Location = new Point(510, 8), Width = 160, Height = 28 };
+        int pad = UiStyle.OuterPadding, half = UiStyle.HalfGap;
+        // Top: [배치 이름][name ……………][현재 창 다시 읽기]  /  refresh notice spanning the row.
+        var top = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = UiStyle.RowHeight + 28 + (pad - half),
+            ColumnCount = 3,
+            RowCount = 2,
+            Padding = new Padding(pad - half, pad - half, pad - half, 0)
+        };
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        top.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, UiStyle.SecondaryButtonWidth + UiStyle.Gap));
+        top.RowStyles.Add(new RowStyle(SizeType.Absolute, UiStyle.RowHeight));
+        top.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        top.Controls.Add(UiStyle.CellLabel("배치 이름"), 0, 0);
+        _nameBox = UiStyle.CellInput(new TextBox { Text = suggestedName, Enabled = nameEditable, AccessibleName = "배치 이름" });
+        top.Controls.Add(_nameBox, 1, 0);
+        _refreshBtn = UiStyle.ConfigureButton(new Button(), "현재 창 다시 읽기");
         _refreshBtn.Click += (_, _) => RefreshSnapshot();
-        _staleWarnLabel = new Label { AutoSize = true, Location = new Point(10, 42), ForeColor = Color.DarkOrange };
-        top.Controls.Add(lbl);
-        top.Controls.Add(_nameBox);
-        top.Controls.Add(_refreshBtn);
-        top.Controls.Add(_staleWarnLabel);
+        top.Controls.Add(_refreshBtn, 2, 0);
+        _staleWarnLabel = UiStyle.CellLabel("", Color.DarkOrange);
+        top.Controls.Add(_staleWarnLabel, 0, 1);
+        top.SetColumnSpan(_staleWarnLabel, 3);
 
         _list = new ListView
         {
@@ -48,28 +64,36 @@ public sealed class WindowPickerDialog : Form
             FullRowSelect = true,
             MultiSelect = false,
             GridLines = true,
+            AccessibleName = "저장할 창 목록"
         };
-        _list.Columns.Add("역할 이름", 160);
-        _list.Columns.Add("프로그램", 140);
-        _list.Columns.Add("제목", 300);
-        _list.Columns.Add("타이틀 조각", 150);
-        _list.Columns.Add("현재 위치", 180);
+        _list.Columns.Add("역할 이름", LogicalToDeviceUnits(160));
+        _list.Columns.Add("프로그램", LogicalToDeviceUnits(140));
+        _list.Columns.Add("제목", LogicalToDeviceUnits(300));
+        _list.Columns.Add("타이틀 조각", LogicalToDeviceUnits(150));
+        _list.Columns.Add("현재 위치", LogicalToDeviceUnits(180));
+        // Long titles stay readable: hover shows the full cell text.
+        _list.ShowItemToolTips = true;
+        var listWrap = new Panel { Dock = DockStyle.Fill, Padding = new Padding(pad, half, pad, 0) };
+        listWrap.Controls.Add(_list);
 
         PopulateList(initialWindows);
 
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 46, Padding = new Padding(10, 8, 10, 8) };
-        _ok = new Button { Text = "저장", DialogResult = DialogResult.OK, Width = 100, Height = 28, Location = new Point(bottom.Width - 230, 8), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        _cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, Width = 100, Height = 28, Location = new Point(bottom.Width - 120, 8), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        bottom.Controls.Add(_ok);
-        bottom.Controls.Add(_cancel);
+        _ok = UiStyle.ConfigureButton(new Button { DialogResult = DialogResult.OK }, "저장");
+        _cancel = UiStyle.ConfigureButton(new Button { DialogResult = DialogResult.Cancel }, "취소");
+        var bottom = UiStyle.Footer(Array.Empty<(Button, int)>(),
+            new (Button, int)[] { (_ok, UiStyle.PrimaryButtonWidth), (_cancel, UiStyle.PrimaryButtonWidth) });
         AcceptButton = _ok;
         CancelButton = _cancel;
         _ok.Click += OnOk;
 
-        Controls.Add(_list);
+        Controls.Add(listWrap);
         Controls.Add(bottom);
         Controls.Add(top);
+        ResumeLayout(true);
     }
+
+    /// <summary>QA: name box, refresh, list, save and cancel.</summary>
+    public IReadOnlyList<Control> UiSmokeKeyControls => new Control[] { _nameBox, _refreshBtn, _list, _ok, _cancel };
 
     private void PopulateList(IReadOnlyList<WindowInfo> windows)
     {

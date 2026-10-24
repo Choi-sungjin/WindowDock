@@ -13,7 +13,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <SatelliteResourceLanguages>en;ko-KR</SatelliteResourceLanguages>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <!-- Generate first: Assets\Generate-WindowDockIcon.ps1 writes Assets\WindowDock.ico. -->
     <ApplicationIcon>Assets\WindowDock.ico</ApplicationIcon>
     <Company>WindowDock</Company>

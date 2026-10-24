@@ -92,12 +92,13 @@ public sealed class MainForm : Form
         _startInTray = startInTray;
         _hotkeyStore = hotkeyStore ?? new HotkeyStore(Path.GetDirectoryName(profiles.ProfilesDir) ?? profiles.ProfilesDir);
 
+        SuspendLayout();
+        UiStyle.ApplyForm(this);
         Text = AppInfo.ProductTitle;
         Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the form
         Size = new Size(1180, 760);
         MinimumSize = new Size(920, 600);
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 9f);
         if (_startInTray)
         {
             // Form must never flash onto the taskbar at startup; the user will Open it from the
@@ -147,6 +148,7 @@ public sealed class MainForm : Form
             ShutdownHotkeys();
             _quickTips.Dispose();
         };
+        ResumeLayout(true);
     }
 
     /// <summary>
@@ -202,124 +204,187 @@ public sealed class MainForm : Form
         base.SetVisibleCore(value);
     }
 
+    // v0.3.2 layout constants (logical px @96 DPI; see UiStyle).
+    private const int SidebarWidth = 300;
+    private const int SidebarMinWidth = 250;
+    private const int ContentMinWidth = 440;
+    private const int GroupButtonRow = UiStyle.ButtonHeight + UiStyle.Gap; // button + one gap
+    private const int CaptionRow = 30;
+    private const int FooterButtonWidth = 230;
+    private const int EntryButtonWidth = 140;
+    private const int NavButtonWidth = 150;
+
+    /// <summary>
+    /// Layout (top → bottom): header (active / monitoring / status), quick area (8 equal slot
+    /// buttons; then a caption + three equal action buttons), split content (sidebar: caption,
+    /// saved list, five stacked full-width actions | entries + results / preview), footer (three
+    /// equal actions on one baseline). Every outer edge is inset by UiStyle.OuterPadding and every
+    /// button has UiStyle.ButtonHeight; no FlowLayoutPanel wrapping.
+    /// </summary>
     private void BuildLayout()
     {
-        var header = new TableLayoutPanel { Dock = DockStyle.Top, Height = 48, ColumnCount = 3, Padding = new Padding(12, 8, 12, 4) };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35f));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+        int pad = UiStyle.OuterPadding, half = UiStyle.HalfGap;
+
+        // ---------- header ----------
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 40,
+            ColumnCount = 3,
+            RowCount = 1,
+            Padding = new Padding(pad - half, 4, pad - half, 0)
+        };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40f));
-        _activeLabel.AutoSize = false; _activeLabel.Dock = DockStyle.Fill; _activeLabel.TextAlign = ContentAlignment.MiddleLeft; _activeLabel.Font = new Font(Font, FontStyle.Bold);
-        _monitorLabel.AutoSize = false; _monitorLabel.Dock = DockStyle.Fill; _monitorLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _statusLabel.AutoSize = false; _statusLabel.Dock = DockStyle.Fill; _statusLabel.TextAlign = ContentAlignment.MiddleLeft; _statusLabel.ForeColor = Color.DimGray;
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60f));
+        header.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        foreach (var l in new[] { _activeLabel, _monitorLabel, _statusLabel })
+        {
+            l.AutoSize = false;
+            l.Dock = DockStyle.Fill;
+            l.TextAlign = ContentAlignment.MiddleLeft;
+            l.AutoEllipsis = true;   // long text is cut with … inside its own column
+            l.UseMnemonic = false;
+            l.Margin = new Padding(half, 0, half, 0);
+        }
+        _activeLabel.Font = UiStyle.BoldFont;
+        _statusLabel.ForeColor = SystemColors.GrayText;
         header.Controls.Add(_activeLabel, 0, 0);
         header.Controls.Add(_monitorLabel, 1, 0);
         header.Controls.Add(_statusLabel, 2, 0);
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 54, Padding = new Padding(10, 10, 10, 10) };
-        _applyBtn.Text = "지금 적용 + 자동 배치 시작"; _applyBtn.Width = 220; _applyBtn.Height = 32;
-        _pauseBtn.Text = "자동 배치 시작"; _pauseBtn.Width = 160; _pauseBtn.Height = 32;
-        _hideBtn.Text = "트레이로 숨기기"; _hideBtn.Width = 160; _hideBtn.Height = 32;
+        // ---------- footer: three equal actions on one baseline ----------
+        UiStyle.ConfigureButton(_applyBtn, "지금 적용 + 자동 배치 시작");
+        UiStyle.ConfigureButton(_pauseBtn, "자동 배치 시작");
+        UiStyle.ConfigureButton(_hideBtn, "트레이로 숨기기");
         _applyBtn.Click += (_, _) => DoApply();
         _pauseBtn.Click += (_, _) => TogglePauseResume();
         _hideBtn.Click += (_, _) => HideToTray();
-        bottom.Controls.Add(_applyBtn);
-        bottom.Controls.Add(_pauseBtn);
-        bottom.Controls.Add(_hideBtn);
+        var bottom = UiStyle.Footer(
+            new (Button, int)[] { (_applyBtn, FooterButtonWidth), (_pauseBtn, FooterButtonWidth), (_hideBtn, FooterButtonWidth) },
+            Array.Empty<(Button, int)>());
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical };
-        split.FixedPanel = FixedPanel.Panel1;
+        // ---------- content split ----------
+        var split = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Vertical, FixedPanel = FixedPanel.Panel1 };
 
-        var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
+        // Sidebar: caption, saved list, five full-width identical actions.
+        var leftLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 7,
+            Padding = new Padding(pad - half, half, half, half)
+        };
+        leftLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, CaptionRow));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 220));
+        for (int i = 0; i < 5; i++) leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, GroupButtonRow));
+        leftLayout.Controls.Add(UiStyle.Caption("저장된 배치"), 0, 0);
 
         _profileList.Dock = DockStyle.Fill;
+        _profileList.IntegralHeight = false;
+        _profileList.Margin = new Padding(half);
         _profileList.SelectedIndexChanged += (_, _) => OnProfileSelected();
-        leftLayout.Controls.Add(_profileList, 0, 0);
+        leftLayout.Controls.Add(_profileList, 0, 1);
 
-        var profButtons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = true, Padding = new Padding(4, 4, 4, 4) };
-        _newBtn.Text = "현재 창에서 새로 저장"; _newBtn.Width = 170; _newBtn.Height = 28;
-        _updateBtn.Text = "선택 배치 업데이트"; _updateBtn.Width = 160; _updateBtn.Height = 28;
-        _activateBtn.Text = "활성 배치로 선택"; _activateBtn.Width = 140; _activateBtn.Height = 28;
-        _renameBtn.Text = "이름 변경"; _renameBtn.Width = 90; _renameBtn.Height = 28;
-        _deleteBtn.Text = "삭제"; _deleteBtn.Width = 70; _deleteBtn.Height = 28;
+        UiStyle.ConfigureButton(_newBtn, "현재 창에서 새로 저장");
+        UiStyle.ConfigureButton(_updateBtn, "선택 배치 업데이트");
+        UiStyle.ConfigureButton(_activateBtn, "활성 배치로 선택");
+        UiStyle.ConfigureButton(_renameBtn, "이름 변경");
+        UiStyle.ConfigureButton(_deleteBtn, "삭제");
         _newBtn.Click += (_, _) => DoCreateFromCurrent();
         _updateBtn.Click += (_, _) => DoUpdateFromCurrent();
         _activateBtn.Click += (_, _) => DoActivateSelected();
         _renameBtn.Click += (_, _) => DoRename();
         _deleteBtn.Click += (_, _) => DoDelete();
-        profButtons.Controls.Add(_newBtn);
-        profButtons.Controls.Add(_updateBtn);
-        profButtons.Controls.Add(_activateBtn);
-        profButtons.Controls.Add(_renameBtn);
-        profButtons.Controls.Add(_deleteBtn);
-        leftLayout.Controls.Add(profButtons, 0, 1);
-
+        int row = 2;
+        foreach (var b in new[] { _newBtn, _updateBtn, _activateBtn, _renameBtn, _deleteBtn })
+        {
+            leftLayout.Controls.Add(b, 0, row++);
+        }
         split.Panel1.Controls.Add(leftLayout);
 
-        var rightSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal };
-        rightSplit.FixedPanel = FixedPanel.None;
+        var rightSplit = new SplitContainer { Dock = DockStyle.Fill, Orientation = Orientation.Horizontal, FixedPanel = FixedPanel.None };
 
-        var entryLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        // Entries: caption row with two equal item actions on the right, entry list, results.
+        var entryLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(half, half, pad - half, 0)
+        };
+        entryLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        entryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, GroupButtonRow));
         entryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 55f));
-        entryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        entryLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, CaptionRow));
         entryLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 45f));
 
+        var entryHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty };
+        entryHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        entryHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, EntryButtonWidth + UiStyle.Gap));
+        entryHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, EntryButtonWidth + UiStyle.Gap));
+        entryHeader.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        entryHeader.Controls.Add(UiStyle.Caption("배치 항목"), 0, 0);
+        UiStyle.ConfigureButton(_editEntryBtn, "항목 편집");
+        UiStyle.ConfigureButton(_removeEntryBtn, "항목 삭제");
+        _editEntryBtn.Click += (_, _) => DoEditEntry();
+        _removeEntryBtn.Click += (_, _) => DoRemoveEntry();
+        entryHeader.Controls.Add(_editEntryBtn, 1, 0);
+        entryHeader.Controls.Add(_removeEntryBtn, 2, 0);
+        entryLayout.Controls.Add(entryHeader, 0, 0);
+
         _entryList.Dock = DockStyle.Fill;
+        _entryList.Margin = new Padding(half);
         _entryList.View = View.Details;
         _entryList.FullRowSelect = true;
         _entryList.GridLines = true;
-        _entryList.Columns.Add("역할", 150);
-        _entryList.Columns.Add("프로그램", 130);
-        _entryList.Columns.Add("타이틀 포함", 160);
-        _entryList.Columns.Add("배치 위치/크기", 180);
-        _entryList.Columns.Add("상태", 90);
+        _entryList.Columns.Add("역할", LogicalToDeviceUnits(150));
+        _entryList.Columns.Add("프로그램", LogicalToDeviceUnits(130));
+        _entryList.Columns.Add("타이틀 포함", LogicalToDeviceUnits(160));
+        _entryList.Columns.Add("배치 위치/크기", LogicalToDeviceUnits(180));
+        _entryList.Columns.Add("상태", LogicalToDeviceUnits(90));
         _entryList.MultiSelect = false;
         _entryList.DoubleClick += (_, _) => DoEditEntry();
-        entryLayout.Controls.Add(_entryList, 0, 0);
+        entryLayout.Controls.Add(_entryList, 0, 1);
 
-        var entryBtns = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(4) };
-        _editEntryBtn.Text = "항목 편집(세부)"; _editEntryBtn.Width = 130; _editEntryBtn.Height = 28;
-        _removeEntryBtn.Text = "항목 삭제"; _removeEntryBtn.Width = 110; _removeEntryBtn.Height = 28;
-        _editEntryBtn.Click += (_, _) => DoEditEntry();
-        _removeEntryBtn.Click += (_, _) => DoRemoveEntry();
-        entryBtns.Controls.Add(_editEntryBtn);
-        entryBtns.Controls.Add(_removeEntryBtn);
-        entryLayout.Controls.Add(entryBtns, 0, 1);
-
-        var resultWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
-        resultWrap.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        resultWrap.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
-        var resultTitle = new Label { Text = "최근 적용/자동 배치 결과", AutoSize = false, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Padding = new Padding(6, 0, 0, 0), ForeColor = Color.DimGray };
-        resultWrap.Controls.Add(resultTitle, 0, 0);
+        entryLayout.Controls.Add(UiStyle.Caption("최근 적용/자동 배치 결과"), 0, 2);
         _resultList.Dock = DockStyle.Fill;
+        _resultList.Margin = new Padding(half);
         _resultList.View = View.Details;
         _resultList.FullRowSelect = true;
         _resultList.GridLines = true;
-        _resultList.Columns.Add("시간", 70);
-        _resultList.Columns.Add("역할", 140);
-        _resultList.Columns.Add("결과", 110);
-        _resultList.Columns.Add("설명", 400);
-        resultWrap.Controls.Add(_resultList, 0, 1);
-        entryLayout.Controls.Add(resultWrap, 0, 2);
+        _resultList.Columns.Add("시간", LogicalToDeviceUnits(80));
+        _resultList.Columns.Add("역할", LogicalToDeviceUnits(140));
+        _resultList.Columns.Add("결과", LogicalToDeviceUnits(110));
+        _resultList.Columns.Add("설명", LogicalToDeviceUnits(400));
+        entryLayout.Controls.Add(_resultList, 0, 3);
 
-        _preview.Dock = DockStyle.Fill;
-
-        var previewWrap = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
-        previewWrap.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
+        // Preview with the first-run help line.
+        var previewWrap = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(half, half, pad - half, half)
+        };
+        previewWrap.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        previewWrap.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
         previewWrap.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
         _emptyHelpLabel.AutoSize = false;
         _emptyHelpLabel.Dock = DockStyle.Fill;
         _emptyHelpLabel.TextAlign = ContentAlignment.MiddleLeft;
-        _emptyHelpLabel.ForeColor = Color.FromArgb(80, 80, 80);
-        _emptyHelpLabel.Padding = new Padding(10, 4, 10, 4);
+        _emptyHelpLabel.ForeColor = SystemColors.GrayText;
+        _emptyHelpLabel.Margin = new Padding(half, 0, half, 0);
+        _emptyHelpLabel.AutoEllipsis = true;
         _emptyHelpLabel.Text = "창을 원하는 자리에 배치 후 '현재 창에서 새로 저장'을 누르세요. 이후 '지금 적용'을 누르면 그 배치로 되돌리고, 같은 프로그램의 새 창을 자동으로 그 자리에 놓습니다.";
+        _preview.Dock = DockStyle.Fill;
+        _preview.Margin = new Padding(half);
         previewWrap.Controls.Add(_emptyHelpLabel, 0, 0);
         previewWrap.Controls.Add(_preview, 0, 1);
 
         rightSplit.Panel1.Controls.Add(entryLayout);
         rightSplit.Panel2.Controls.Add(previewWrap);
-
         split.Panel2.Controls.Add(rightSplit);
 
         _quickBar = BuildQuickBar();
@@ -333,74 +398,86 @@ public sealed class MainForm : Form
         {
             try
             {
-                split.Panel1MinSize = 240;
-                split.Panel2MinSize = 420;
-                if (split.Width > 680) split.SplitterDistance = 310;
-                if (rightSplit.Height > 320) rightSplit.SplitterDistance = Math.Min(rightSplit.Height - 180, Math.Max(220, rightSplit.Height / 2));
+                // Splitter values are not auto-scaled → convert logical px for this DPI.
+                split.Panel1MinSize = LogicalToDeviceUnits(SidebarMinWidth);
+                split.Panel2MinSize = LogicalToDeviceUnits(ContentMinWidth);
+                if (split.Width > LogicalToDeviceUnits(SidebarWidth + ContentMinWidth)) split.SplitterDistance = LogicalToDeviceUnits(SidebarWidth);
+                int h = rightSplit.Height;
+                if (h > LogicalToDeviceUnits(300))
+                {
+                    rightSplit.SplitterDistance = Math.Min(h - LogicalToDeviceUnits(150), Math.Max(LogicalToDeviceUnits(240), (int)(h * 0.62)));
+                }
             }
             catch { }
         };
     }
 
     /// <summary>
-    /// One row: eight numbered slot buttons, Previous/Next apply, and the hotkey settings button.
-    /// Percent columns keep every button visible at the 920x600 minimum size; AutoEllipsis trims
-    /// long profile names at the END so the slot number at the start always stays visible.
+    /// Quick area, two rows. Row 1: the eight slot buttons, equal width across the content width
+    /// (number first; long names end-ellipsized; full name in tooltip/AccessibleName).
+    /// Row 2: a short caption on the left and three equal action buttons (이전 / 다음 / 단축키 설정).
     /// </summary>
     private TableLayoutPanel BuildQuickBar()
     {
-        var bar = new TableLayoutPanel
+        int pad = UiStyle.OuterPadding, half = UiStyle.HalfGap;
+        var area = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 42,
-            ColumnCount = HotkeyActions.SlotCount + 3,
-            RowCount = 1,
-            Padding = new Padding(8, 3, 8, 3),
+            Height = 2 * GroupButtonRow + 2 * half,
+            ColumnCount = 1,
+            RowCount = 2,
+            Padding = new Padding(pad - half, half, pad - half, half),
             AccessibleName = "빠른 적용"
         };
-        for (int i = 0; i < HotkeyActions.SlotCount; i++) bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 8f));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f));
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14f));
-        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        area.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        area.RowStyles.Add(new RowStyle(SizeType.Absolute, GroupButtonRow));
+        area.RowStyles.Add(new RowStyle(SizeType.Absolute, GroupButtonRow));
 
+        var slots = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = HotkeyActions.SlotCount,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            AccessibleName = "빠른 적용 슬롯"
+        };
+        for (int i = 0; i < HotkeyActions.SlotCount; i++) slots.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / HotkeyActions.SlotCount));
+        slots.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
         for (int i = 0; i < HotkeyActions.SlotCount; i++)
         {
             int n = i + 1;
-            var b = new Button
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(2),
-                AutoEllipsis = true,
-                UseMnemonic = false,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Text = $"{n}  (비어 있음)",
-                AccessibleName = $"슬롯 {n}"
-            };
+            var b = UiStyle.ConfigureButton(new Button { AccessibleName = $"슬롯 {n}" }, $"{n}  (비어 있음)");
+            b.TextAlign = ContentAlignment.MiddleLeft;
             b.Click += (_, _) => PerformSlotApply(n, fromHotkey: false);
             _slotButtons[i] = b;
-            bar.Controls.Add(b, i, 0);
+            slots.Controls.Add(b, i, 0);
         }
+        area.Controls.Add(slots, 0, 0);
 
-        void Style(Button b, string text)
+        var nav = new TableLayoutPanel
         {
-            b.Dock = DockStyle.Fill;
-            b.Margin = new Padding(2);
-            b.AutoEllipsis = true;
-            b.UseMnemonic = false;
-            b.Text = text;
-            b.AccessibleName = text;
-        }
-        Style(_prevBtn, "◀ 이전 배치");
-        Style(_nextBtn, "다음 배치 ▶");
-        Style(_hotkeySettingsBtn, "단축키 설정…");
+            Dock = DockStyle.Fill,
+            ColumnCount = 4,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        for (int i = 0; i < 3; i++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, NavButtonWidth + UiStyle.Gap));
+        nav.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        nav.Controls.Add(UiStyle.CellLabel("숫자 버튼: 지정한 배치를 바로 적용 · 이전/다음: 저장 목록 순서로 적용", SystemColors.GrayText), 0, 0);
+        UiStyle.ConfigureButton(_prevBtn, "◀ 이전 배치");
+        UiStyle.ConfigureButton(_nextBtn, "다음 배치 ▶");
+        UiStyle.ConfigureButton(_hotkeySettingsBtn, "단축키 설정…");
         _prevBtn.Click += (_, _) => PerformNavigateApply(next: false, fromHotkey: false);
         _nextBtn.Click += (_, _) => PerformNavigateApply(next: true, fromHotkey: false);
         _hotkeySettingsBtn.Click += (_, _) => DoHotkeySettings();
-        bar.Controls.Add(_prevBtn, HotkeyActions.SlotCount, 0);
-        bar.Controls.Add(_nextBtn, HotkeyActions.SlotCount + 1, 0);
-        bar.Controls.Add(_hotkeySettingsBtn, HotkeyActions.SlotCount + 2, 0);
-        return bar;
+        nav.Controls.Add(_prevBtn, 1, 0);
+        nav.Controls.Add(_nextBtn, 2, 0);
+        nav.Controls.Add(_hotkeySettingsBtn, 3, 0);
+        area.Controls.Add(nav, 0, 1);
+        return area;
     }
 
     private void ReloadProfiles()
@@ -494,8 +571,9 @@ public sealed class MainForm : Form
     private void UpdateHeader()
     {
         _activeLabel.Text = _monitor.ActiveProfile is null ? "활성 배치: 없음" : $"활성 배치: {_monitor.ActiveProfile.Name}";
+        _quickTips.SetToolTip(_activeLabel, _activeLabel.Text);
         _monitorLabel.Text = _monitor.IsMonitoring ? "자동 배치: 켜짐 ●" : "자동 배치: 꺼짐 ○";
-        _monitorLabel.ForeColor = _monitor.IsMonitoring ? Color.ForestGreen : Color.DimGray;
+        _monitorLabel.ForeColor = _monitor.IsMonitoring ? Color.ForestGreen : SystemColors.GrayText;
         _pauseBtn.Text = _monitor.IsMonitoring ? "자동 배치 일시정지" : "자동 배치 시작";
         TrayPauseItem.Text = _monitor.IsMonitoring ? "자동 배치 일시정지" : "자동 배치 시작";
     }
@@ -1289,6 +1367,9 @@ public sealed class MainForm : Form
     public void AppendStatus(string s)
     {
         _statusLabel.Text = $"{DateTime.Now:HH:mm:ss} {s}";
+        // The header column ellipsizes long messages; the full text stays available.
+        _quickTips.SetToolTip(_statusLabel, _statusLabel.Text);
+        _statusLabel.AccessibleDescription = _statusLabel.Text;
     }
 
     /// <summary>Shows an informational dialog or appends to status when modal dialogs are suppressed
@@ -1417,6 +1498,16 @@ public sealed class MainForm : Form
     public void UiSmokeClickNext() => _nextBtn.PerformClick();
     public IReadOnlyList<Button> UiSmokeQuickButtons =>
         _slotButtons.Concat(new[] { _prevBtn, _nextBtn, _hotkeySettingsBtn }).ToList();
+
+    /// <summary>v0.3.2 layout groups whose buttons are meant to be identical in size.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<Button>> UiSmokeActionGroups => new Dictionary<string, IReadOnlyList<Button>>
+    {
+        ["slots"] = _slotButtons.ToList(),
+        ["nav"] = new[] { _prevBtn, _nextBtn, _hotkeySettingsBtn },
+        ["sidebar"] = new[] { _newBtn, _updateBtn, _activateBtn, _renameBtn, _deleteBtn },
+        ["entry"] = new[] { _editEntryBtn, _removeEntryBtn },
+        ["footer"] = new[] { _applyBtn, _pauseBtn, _hideBtn },
+    };
     public IReadOnlyList<string> UiSmokeProfileListIds =>
         _profileList.Items.Cast<ProfileRow>().Select(r => r.Profile.Id).ToList();
 
@@ -1512,16 +1603,44 @@ public sealed class InputDialog : Form
     public string Value => _box.Text.Trim();
     public InputDialog(string title, string prompt, string initial)
     {
+        SuspendLayout();
+        UiStyle.ApplyForm(this);
         Text = title;
-        Size = new Size(420, 180);
+        Icon = AppIcon.ForForm; // shared; not owned/disposed
+        ClientSize = new Size(440, 152);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MinimizeBox = false; MaximizeBox = false;
+        ShowInTaskbar = false;
         StartPosition = FormStartPosition.CenterParent;
-        var lbl = new Label { Text = prompt, Location = new Point(14, 16), AutoSize = true };
-        _box = new TextBox { Location = new Point(14, 44), Width = 380, Text = initial };
-        var ok = new Button { Text = "확인", Location = new Point(214, 90), Width = 90, DialogResult = DialogResult.OK };
-        var cancel = new Button { Text = "취소", Location = new Point(306, 90), Width = 90, DialogResult = DialogResult.Cancel };
-        Controls.Add(lbl); Controls.Add(_box); Controls.Add(ok); Controls.Add(cancel);
+
+        int pad = UiStyle.OuterPadding, half = UiStyle.HalfGap;
+        var body = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(pad - half, pad - half, pad - half, 0)
+        };
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, UiStyle.RowHeight));
+        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        body.Controls.Add(UiStyle.CellLabel(prompt), 0, 0);
+        _box = UiStyle.CellInput(new TextBox { Text = initial, AccessibleName = prompt.TrimEnd(':', ' ') });
+        body.Controls.Add(_box, 0, 1);
+
+        var ok = UiStyle.ConfigureButton(new Button { DialogResult = DialogResult.OK }, "확인");
+        var cancel = UiStyle.ConfigureButton(new Button { DialogResult = DialogResult.Cancel }, "취소");
+        var footer = UiStyle.Footer(Array.Empty<(Button, int)>(),
+            new (Button, int)[] { (ok, UiStyle.PrimaryButtonWidth), (cancel, UiStyle.PrimaryButtonWidth) });
+
+        Controls.Add(body);
+        Controls.Add(footer);
         AcceptButton = ok; CancelButton = cancel;
+        ResumeLayout(true);
     }
+
+    /// <summary>QA: the text box and the two footer buttons.</summary>
+    public IReadOnlyList<Control> UiSmokeKeyControls =>
+        new Control[] { _box }.Concat(Controls.OfType<TableLayoutPanel>().SelectMany(t => t.Controls.OfType<Button>())).ToList();
 }

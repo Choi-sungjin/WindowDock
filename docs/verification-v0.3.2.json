@@ -1,0 +1,64 @@
+{
+  "version": "0.3.2",
+  "date": "2026-10-24",
+  "platform": "Windows x64",
+  "sourceAuthorship": "Claude Code",
+  "independentReview": "Codex",
+  "executableSha256": "9A24C5B58F0E84FDC775DFA262A1B48E6D62F0453DB84B5442B8672A397EF014",
+  "build": {
+    "warnings": 0,
+    "errors": 0
+  },
+  "selfTest": {
+    "total": 95,
+    "passed": 95,
+    "failed": 0
+  },
+  "hotkeySmoke": {
+    "pickerRename": true,
+    "syntheticHotkeyDelivery": true,
+    "ok": true,
+    "steps": 15,
+    "mainMinimum": true,
+    "lockedCommit": true,
+    "passedSteps": 15,
+    "dialogMinimum": true,
+    "dialogDefault": true
+  },
+  "uiSmoke": {
+    "updateSaved": true,
+    "updateFailure": true,
+    "updateCancel": true,
+    "ok": true,
+    "scopeViolations": 0,
+    "phases": 15
+  },
+  "activationSmoke": {
+    "normalSecondLaunch": true,
+    "traySettingsNoApply": true,
+    "ok": true,
+    "iconFramesOk": true,
+    "preHandleRequest": true,
+    "duplicateStaysHidden": true
+  },
+  "trayStart": {
+    "monitoringOn": true,
+    "monitoringOff": true,
+    "existingWindowMovesAtStartup": 0
+  },
+  "dailyDeployment": {
+    "actualMainAndSettingsVisuallyReviewed": true,
+    "dataFilesByteIdentical": 4,
+    "healthFailures": 0,
+    "shortcutAndLogonUpdated": true,
+    "activeAndMonitoringPreserved": true,
+    "appWindowsResponded": 13,
+    "userWindowsUnchanged": 7
+  },
+  "limits": [
+    "One physical 5120x1440 screen at 100 percent scaling; mixed DPI and multiple monitors not reverified.",
+    "No physical reboot or logoff; registered logon task invoked.",
+    "OS keyboard routing not repeated; previous v0.3.1 evidence is separate.",
+    "Linux remains v0.3.0, unchanged."
+  ]
+}

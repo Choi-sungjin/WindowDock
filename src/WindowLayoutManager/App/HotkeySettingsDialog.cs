@@ -31,53 +31,57 @@ public sealed class HotkeySettingsDialog : Form
     public HotkeySettingsDialog(HotkeyConfig current, IReadOnlyList<Profile> sortedProfiles, IReadOnlyDictionary<HotkeyActionId, HotkeyStatus> statuses)
     {
         _initial = current.Clone();
+        SuspendLayout();
+        UiStyle.ApplyForm(this);
         Text = "빠른 적용 슬롯과 단축키";
         Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the dialog
         StartPosition = FormStartPosition.CenterParent;
-        Font = new Font("Segoe UI", 9f);
-        Size = new Size(880, 640);
+        Size = new Size(820, 640);
         MinimumSize = new Size(740, 600);
         MinimizeBox = false;
         MaximizeBox = false;
         ShowInTaskbar = false;
+        Disposed += (_, _) => _tips.Dispose();
 
+        int pad = UiStyle.OuterPadding, half = UiStyle.HalfGap;
         var intro = new Label
         {
             Dock = DockStyle.Top,
-            Height = 70,
+            Height = 64,
             AutoSize = false,
-            Padding = new Padding(12, 10, 12, 4),
-            Text = "슬롯 1~8에 저장된 배치를 지정하면 메인 창의 숫자 버튼으로 바로 적용할 수 있습니다 (단축키를 켜지 않아도 버튼은 동작).\n" +
-                   "전역 단축키는 처음에는 모두 꺼져 있습니다. '사용'을 체크하면 창자리가 실행 중일 때(트레이 포함) 어디서든 동작합니다.\n" +
-                   "단축키 칸을 선택하고 원하는 조합을 누르세요. Ctrl 또는 Alt가 필요하며 Windows 키와 F12는 쓸 수 없습니다."
+            Padding = new Padding(pad, pad - half, pad, 0),
+            Text = "슬롯 1~8에 배치를 지정하면 숫자 버튼으로 바로 적용합니다. 단축키는 별도로 켤 수 있습니다.\n" +
+                   "키 조합 칸을 선택하고 원하는 키를 누르세요. Ctrl 또는 Alt를 포함해야 합니다.\n" +
+                   "처음에는 모든 단축키가 꺼져 있습니다. Windows 키와 F12는 사용할 수 없습니다."
         };
 
+        // Five aligned columns. Every row has the same absolute height; inputs are vertically
+        // centered in their cells (Anchor Left|Right), labels fill and center their text.
         var table = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 5,
             RowCount = 12,
             AutoScroll = true,
-            Padding = new Padding(12, 4, 12, 4),
+            Padding = new Padding(pad - half, 0, pad - half, 0),
             TabIndex = 0
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 84));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-        for (int i = 0; i < 10; i++) table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 172));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        for (int i = 0; i < 10; i++) table.RowStyles.Add(new RowStyle(SizeType.Absolute, UiStyle.RowHeight));
         // Empty filler row absorbs the remaining height. Without it TableLayoutPanel stretches the
-        // LAST real row (Next), where labels/checkbox center vertically but the single-line key
-        // field stays at the top, so the row looks misaligned.
+        // LAST real row (Next) and that row's controls no longer line up with the others.
         table.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
         table.Controls.Add(HeaderLabel("항목"), 0, 0);
         table.Controls.Add(HeaderLabel("적용할 배치"), 1, 0);
         table.Controls.Add(HeaderLabel("단축키"), 2, 0);
-        table.Controls.Add(HeaderLabel("키 조합 (칸 선택 후 누르기)"), 3, 0);
-        table.Controls.Add(HeaderLabel("현재 상태"), 4, 0);
+        table.Controls.Add(HeaderLabel("키 조합"), 3, 0);
+        table.Controls.Add(HeaderLabel("상태"), 4, 0);
 
         var dupNames = sortedProfiles.GroupBy(p => p.Name).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet();
 
@@ -88,23 +92,15 @@ public sealed class HotkeySettingsDialog : Form
             var b = _initial.Get(action);
             var label = HotkeyActions.KoreanLabel(action);
 
-            table.Controls.Add(new Label
-            {
-                Text = label,
-                AutoSize = false,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft
-            }, 0, row);
+            table.Controls.Add(UiStyle.CellLabel(label), 0, row);
 
             if (HotkeyActions.IsSlot(action))
             {
-                var combo = new ComboBox
+                var combo = UiStyle.CellInput(new ComboBox
                 {
                     DropDownStyle = ComboBoxStyle.DropDownList,
-                    Dock = DockStyle.Fill,
-                    AccessibleName = $"{label} 적용할 배치",
-                    Margin = new Padding(3, 5, 3, 3)
-                };
+                    AccessibleName = $"{label} 적용할 배치"
+                });
                 combo.Items.Add(new ProfileChoice(null, "(할당 안 함)"));
                 ProfileChoice? selected = null;
                 foreach (var p in sortedProfiles)
@@ -128,35 +124,31 @@ public sealed class HotkeySettingsDialog : Form
             }
             else
             {
-                table.Controls.Add(new Label
-                {
-                    Text = action == HotkeyActionId.Previous
-                        ? "저장 목록 순서상 이전 배치 적용 (처음에서 끝으로 순환)"
-                        : "저장 목록 순서상 다음 배치 적용 (끝에서 처음으로 순환)",
-                    AutoSize = false,
-                    Dock = DockStyle.Fill,
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    AutoEllipsis = true
-                }, 1, row);
+                bool prev = action == HotkeyActionId.Previous;
+                var desc = UiStyle.CellLabel(prev ? "목록의 이전 배치 (순환)" : "목록의 다음 배치 (순환)");
+                _tips.SetToolTip(desc, prev
+                    ? "저장 목록 순서상 이전 배치를 적용합니다. 처음 배치에서는 마지막 배치로 순환합니다."
+                    : "저장 목록 순서상 다음 배치를 적용합니다. 마지막 배치에서는 처음 배치로 순환합니다.");
+                table.Controls.Add(desc, 1, row);
             }
 
             var chk = new CheckBox
             {
                 Text = "사용",
                 Checked = b.Enabled,
-                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(half, 0, half, 0),
                 AccessibleName = $"{label} 전역 단축키 사용"
             };
             chk.CheckedChanged += (_, _) => MarkChanged(i);
             _enabled[i] = chk;
             table.Controls.Add(chk, 2, row);
 
-            var cap = new HotkeyCaptureBox
+            var cap = UiStyle.CellInput(new HotkeyCaptureBox
             {
-                Dock = DockStyle.Fill,
-                AccessibleName = $"{label} 단축키 키 조합. 이 칸에서 원하는 조합을 누르세요",
-                Margin = new Padding(3, 5, 3, 3)
-            };
+                AccessibleName = $"{label} 단축키 키 조합. 이 칸에서 원하는 조합을 누르세요"
+            });
             cap.SetCombo(b.Ctrl, b.Alt, b.Shift, b.Key);
             cap.Feedback += msg =>
             {
@@ -166,14 +158,9 @@ public sealed class HotkeySettingsDialog : Form
             _captures[i] = cap;
             table.Controls.Add(cap, 3, row);
 
-            var st = new Label
-            {
-                Text = statuses.TryGetValue(action, out var s) ? s.KoreanText : "꺼짐",
-                AutoSize = false,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                AutoEllipsis = true
-            };
+            var statusText = statuses.TryGetValue(action, out var s) ? s.KoreanText : "꺼짐";
+            var st = UiStyle.CellLabel(statusText);
+            _tips.SetToolTip(st, statusText);
             _statusLabels[i] = st;
             table.Controls.Add(st, 4, row);
         }
@@ -182,23 +169,18 @@ public sealed class HotkeySettingsDialog : Form
         _errorLabel.Height = 40;
         _errorLabel.AutoSize = false;
         _errorLabel.ForeColor = Color.Firebrick;
-        _errorLabel.Padding = new Padding(12, 2, 12, 2);
+        _errorLabel.Padding = new Padding(pad, 2, pad, 2);
+        _errorLabel.TextAlign = ContentAlignment.MiddleLeft;
 
-        var bottom = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 48,
-            FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(10, 8, 10, 8)
-        };
-        _cancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, Width = 96, Height = 30 };
-        _ok = new Button { Text = "확인", Width = 96, Height = 30 };
+        // Footer: [기본 키 조합으로] ……… [확인][취소], one baseline, same height.
+        _cancel = UiStyle.ConfigureButton(new Button { DialogResult = DialogResult.Cancel }, "취소");
+        _ok = UiStyle.ConfigureButton(new Button(), "확인");
         _ok.Click += OnOk;
-        var reset = new Button { Text = "기본 키 조합으로", Width = 130, Height = 30 };
+        var reset = UiStyle.ConfigureButton(new Button(), "기본 키 조합으로");
         reset.Click += (_, _) => ResetCombos();
-        bottom.Controls.Add(_cancel);
-        bottom.Controls.Add(_ok);
-        bottom.Controls.Add(reset);
+        var bottom = UiStyle.Footer(
+            new (Button, int)[] { (reset, UiStyle.SecondaryButtonWidth) },
+            new (Button, int)[] { (_ok, UiStyle.PrimaryButtonWidth), (_cancel, UiStyle.PrimaryButtonWidth) });
 
         Controls.Add(table);
         Controls.Add(_errorLabel);
@@ -207,22 +189,24 @@ public sealed class HotkeySettingsDialog : Form
 
         AcceptButton = _ok;
         CancelButton = _cancel;
+        ResumeLayout(true);
     }
 
-    private static Label HeaderLabel(string t) => new()
+    private readonly ToolTip _tips = new() { AutoPopDelay = 15000 };
+
+    private static Label HeaderLabel(string t)
     {
-        Text = t,
-        AutoSize = false,
-        Dock = DockStyle.Fill,
-        TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = Color.DimGray
-    };
+        var l = UiStyle.CellLabel(t, SystemColors.GrayText);
+        l.Font = UiStyle.BoldFont;
+        return l;
+    }
 
     private static string ShortId(string id) => id.Length <= 6 ? id : id[..6];
 
     private void MarkChanged(int index)
     {
-        _statusLabels[index].Text = "변경됨 — 확인을 누르면 적용";
+        _statusLabels[index].Text = "변경됨 (확인 시 적용)";
+        _tips.SetToolTip(_statusLabels[index], "변경됨 — 확인을 누르면 저장하고 적용합니다.");
     }
 
     private void ResetCombos()

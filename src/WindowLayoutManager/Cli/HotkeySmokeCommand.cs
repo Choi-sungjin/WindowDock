@@ -91,6 +91,8 @@ public static class HotkeySmokeCommand
         public string? DialogDetail { get; set; }
         public bool MainMinLayoutOk { get; set; }
         public string? MainMinDetail { get; set; }
+        public bool PickerRenameLayoutOk { get; set; }
+        public string? PickerRenameDetail { get; set; }
 
         public string OsDispatch { get; set; } = "not_requested";
         public bool ApplicationRunReturned { get; set; }
@@ -414,6 +416,54 @@ public static class HotkeySmokeCommand
             dlg.Close();
         }, () => true, _ => { }));
 
+        // v0.3.2: picker and rename dialogs — key controls inside the client area, screenshots for review.
+        steps.Add(new Step("picker_and_rename_layout", 200, () =>
+        {
+            var problems = new List<string>();
+            bool Inside(Form f, IEnumerable<Control> cs, string tag)
+            {
+                var client = f.RectangleToScreen(f.ClientRectangle);
+                bool ok = true;
+                foreach (var c in cs)
+                {
+                    var rect = c.RectangleToScreen(c.ClientRectangle);
+                    if (!c.Visible || c.Width <= 0 || c.Height <= 0 || !client.Contains(rect))
+                    {
+                        problems.Add($"{tag}:{c.AccessibleName ?? c.Text}:{rect}");
+                        ok = false;
+                    }
+                }
+                return ok;
+            }
+            using (var picker = new WindowPickerDialog(mock, mock.Windows.ToList(), "QA 배치"))
+            {
+                picker.StartPosition = FormStartPosition.Manual;
+                picker.Location = new Point(60, 60);
+                picker.Show();
+                Application.DoEvents();
+                Inside(picker, picker.UiSmokeKeyControls, "picker-default");
+                Snapshot(picker, Path.Combine(outDir, outBase + ".picker-default.png"));
+                picker.Size = picker.MinimumSize;
+                Application.DoEvents();
+                Inside(picker, picker.UiSmokeKeyControls, "picker-min");
+                Snapshot(picker, Path.Combine(outDir, outBase + ".picker-min.png"));
+                picker.Close();
+            }
+            using (var input = new InputDialog("배치 이름 변경", "새 이름:", "아주 긴 배치 이름이 들어가도 입력 칸 안에서 스크롤됩니다"))
+            {
+                input.StartPosition = FormStartPosition.Manual;
+                input.Location = new Point(60, 60);
+                input.Show();
+                Application.DoEvents();
+                Inside(input, input.UiSmokeKeyControls, "rename");
+                if (input.UiSmokeKeyControls.Count != 3) problems.Add($"rename:control_count:{input.UiSmokeKeyControls.Count}");
+                Snapshot(input, Path.Combine(outDir, outBase + ".rename.png"));
+                input.Close();
+            }
+            r.PickerRenameLayoutOk = problems.Count == 0;
+            r.PickerRenameDetail = problems.Count == 0 ? "ok" : string.Join(";", problems.Take(8));
+        }, () => true, _ => { }));
+
         steps.Add(new Step("main_min_layout", 200, () =>
         {
             form.Size = form.MinimumSize;
@@ -428,6 +478,31 @@ public static class HotkeySmokeCommand
             for (int i = 1; i <= 8; i++)
             {
                 if (!form.UiSmokeSlotButtonText(i).StartsWith(i.ToString())) problems.Add($"slot{i}_number_missing");
+            }
+            // v0.3.2: every action group is identical in size, fully inside the client area,
+            // non-overlapping, and (except slot names, which ellipsize by design) its label fits.
+            int tol = Math.Max(2, form.LogicalToDeviceUnits(2));
+            int minH = form.LogicalToDeviceUnits(UiStyle.ButtonHeight) - tol;
+            foreach (var (groupName, group) in form.UiSmokeActionGroups)
+            {
+                var first = group[0];
+                var rects = new List<Rectangle>();
+                foreach (var b in group)
+                {
+                    var rect = b.RectangleToScreen(b.ClientRectangle);
+                    if (!b.Visible || !client.Contains(rect)) problems.Add($"{groupName}:{b.Text}:outside:{rect}");
+                    if (Math.Abs(b.Width - first.Width) > tol || Math.Abs(b.Height - first.Height) > tol)
+                        problems.Add($"{groupName}:{b.Text}:size:{b.Width}x{b.Height}vs{first.Width}x{first.Height}");
+                    if (b.Height < minH) problems.Add($"{groupName}:{b.Text}:short:{b.Height}");
+                    if (rects.Any(o => o.IntersectsWith(rect))) problems.Add($"{groupName}:{b.Text}:overlap");
+                    rects.Add(rect);
+                    if (groupName != "slots")
+                    {
+                        var need = TextRenderer.MeasureText(b.Text, b.Font);
+                        if (need.Width > b.ClientSize.Width - 8 || need.Height > b.ClientSize.Height)
+                            problems.Add($"{groupName}:{b.Text}:text_clipped:{need.Width}x{need.Height}>{b.ClientSize.Width}x{b.ClientSize.Height}");
+                    }
+                }
             }
             r.MainMinLayoutOk = problems.Count == 0;
             r.MainMinDetail = problems.Count == 0 ? "ok" : string.Join(";", problems);
@@ -545,6 +620,7 @@ public static class HotkeySmokeCommand
                && r.LockedCommitOk
                && r.DialogDefaultLayoutOk && r.DialogMinLayoutOk
                && r.MainMinLayoutOk
+               && r.PickerRenameLayoutOk
                && r.ApplicationRunReturned
                && r.ReleasedAfterExit
                && osOk;
@@ -603,6 +679,9 @@ public static class HotkeySmokeCommand
         // be evenly spaced.
         if (d.UiSmokeCaptureBoxes.Count == 10 && d.UiSmokeEnableBoxes.Count == 10)
         {
+            // DPI-independent: the configured row height in device pixels for this dialog.
+            int rowPx = d.LogicalToDeviceUnits(UiStyle.RowHeight);
+            int tol = Math.Max(3, d.LogicalToDeviceUnits(3));
             int? prevCenter = null;
             for (int i = 0; i < 10; i++)
             {
@@ -610,9 +689,15 @@ public static class HotkeySmokeCommand
                 var chkR = d.UiSmokeEnableBoxes[i].RectangleToScreen(d.UiSmokeEnableBoxes[i].ClientRectangle);
                 int capCenter = capR.Top + capR.Height / 2;
                 int chkCenter = chkR.Top + chkR.Height / 2;
-                if (Math.Abs(capCenter - chkCenter) > 8) problems.Add($"row{i + 1}_misaligned:{capCenter}vs{chkCenter}");
-                if (chkR.Height > 40) problems.Add($"row{i + 1}_stretched:{chkR.Height}");
-                if (prevCenter is int p && Math.Abs(capCenter - p - 34) > 4) problems.Add($"row{i + 1}_spacing:{capCenter - p}");
+                if (Math.Abs(capCenter - chkCenter) > tol + 2) problems.Add($"row{i + 1}_misaligned:{capCenter}vs{chkCenter}");
+                if (i < d.UiSmokeProfileCombos.Count)
+                {
+                    var cbR = d.UiSmokeProfileCombos[i].RectangleToScreen(d.UiSmokeProfileCombos[i].ClientRectangle);
+                    int cbCenter = cbR.Top + cbR.Height / 2;
+                    if (Math.Abs(capCenter - cbCenter) > tol + 2) problems.Add($"row{i + 1}_combo_misaligned:{capCenter}vs{cbCenter}");
+                }
+                if (chkR.Height > rowPx) problems.Add($"row{i + 1}_stretched:{chkR.Height}");
+                if (prevCenter is int p && Math.Abs(capCenter - p - rowPx) > tol) problems.Add($"row{i + 1}_spacing:{capCenter - p}/{rowPx}");
                 prevCenter = capCenter;
             }
         }
