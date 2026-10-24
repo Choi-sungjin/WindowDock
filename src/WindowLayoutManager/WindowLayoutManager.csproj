@@ -13,7 +13,9 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <SatelliteResourceLanguages>en;ko-KR</SatelliteResourceLanguages>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
+    <!-- Generate first: Assets\Generate-WindowDockIcon.ps1 writes Assets\WindowDock.ico. -->
+    <ApplicationIcon>Assets\WindowDock.ico</ApplicationIcon>
     <Company>WindowDock</Company>
     <Product>창자리 (WindowDock)</Product>
     <AssemblyTitle>창자리 (WindowDock)</AssemblyTitle>
@@ -28,5 +30,10 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Same .ico embedded for the form / tray icon (portable single EXE, no loose files). -->
+    <EmbeddedResource Include="Assets\WindowDock.ico" LogicalName="WindowDock.ico" />
+  </ItemGroup>
 
 </Project>

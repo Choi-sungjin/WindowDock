@@ -32,6 +32,7 @@ public sealed class HotkeySettingsDialog : Form
     {
         _initial = current.Clone();
         Text = "빠른 적용 슬롯과 단축키";
+        Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the dialog
         StartPosition = FormStartPosition.CenterParent;
         Font = new Font("Segoe UI", 9f);
         Size = new Size(880, 640);

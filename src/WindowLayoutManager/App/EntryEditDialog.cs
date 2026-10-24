@@ -29,6 +29,7 @@ public sealed class EntryEditDialog : Form
     {
         _entry = entry;
         Text = $"항목 편집 — {entry.Role}";
+        Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the dialog
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(640, 460);
         Size = new Size(680, 480);

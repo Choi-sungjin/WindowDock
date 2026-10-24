@@ -37,7 +37,14 @@ public sealed class MainForm : Form
     public ToolStripMenuItem TrayApplyMenu { get; }
     public ToolStripMenuItem TrayPauseItem { get; }
     public ToolStripMenuItem TrayOpenItem { get; }
+    public ToolStripMenuItem TraySettingsItem { get; }
     public ToolStripMenuItem TrayExitItem { get; }
+    private readonly Icon _trayIcon;
+    private readonly bool _trayIconOwned;
+    private int _externalActivationCount;
+    private string? _activationListenerError;
+    private volatile bool _activationReady;
+    private int _pendingExternalActivation;
 
     private List<Profile> _profilesCache = new();
     private Profile? _selectedProfile;
@@ -85,7 +92,8 @@ public sealed class MainForm : Form
         _startInTray = startInTray;
         _hotkeyStore = hotkeyStore ?? new HotkeyStore(Path.GetDirectoryName(profiles.ProfilesDir) ?? profiles.ProfilesDir);
 
-        Text = "창자리 (WindowDock)";
+        Text = AppInfo.ProductTitle;
+        Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the form
         Size = new Size(1180, 760);
         MinimumSize = new Size(920, 600);
         StartPosition = FormStartPosition.CenterScreen;
@@ -99,21 +107,25 @@ public sealed class MainForm : Form
 
         BuildLayout();
 
+        _trayIcon = AppIcon.CreateTrayIcon(out _trayIconOwned);
         _tray = new NotifyIcon
         {
             Visible = true,
-            Text = "창자리 (WindowDock)",
-            Icon = SystemIcons.Application
+            Text = AppInfo.ProductTitle,
+            Icon = _trayIcon
         };
         _trayMenu = new ContextMenuStrip();
         TrayOpenItem = new ToolStripMenuItem("열기");
         TrayOpenItem.Click += (_, _) => ShowFromTray();
+        TraySettingsItem = new ToolStripMenuItem("단축키 설정…");
+        TraySettingsItem.Click += (_, _) => OpenHotkeySettingsFromTray();
         TrayApplyMenu = new ToolStripMenuItem("배치 적용");
         TrayPauseItem = new ToolStripMenuItem("자동 배치 일시정지");
         TrayPauseItem.Click += (_, _) => TogglePauseResume();
         TrayExitItem = new ToolStripMenuItem("종료");
         TrayExitItem.Click += (_, _) => ExitFromTray();
         _trayMenu.Items.Add(TrayOpenItem);
+        _trayMenu.Items.Add(TraySettingsItem);
         _trayMenu.Items.Add(TrayApplyMenu);
         _trayMenu.Items.Add(TrayPauseItem);
         _trayMenu.Items.Add(new ToolStripSeparator());
@@ -160,7 +172,12 @@ public sealed class MainForm : Form
         RefreshTrayMenu();
         UpdateHeader();
         UpdateEmptyState();
+        if (AppIcon.LoadError != null)
+            AppendStatus($"앱 아이콘을 불러오지 못해 기본 아이콘을 사용합니다 ({AppIcon.LoadError}).");
+        if (_activationListenerError != null)
+            AppendStatus($"바로 가기로 다시 실행해도 이 창을 열 수 없습니다 ({_activationListenerError}). 트레이 아이콘의 '열기'를 사용하세요.");
         _timer.Start();
+        MarkActivationReady();
     }
 
     /// <summary>
@@ -1012,7 +1029,7 @@ public sealed class MainForm : Form
         AppendStatus(msg);
         if (fromHotkey && !Visible && !_suppressModalDialogs)
         {
-            try { _tray.ShowBalloonTip(2500, "창자리 (WindowDock)", msg, ToolTipIcon.Info); } catch { }
+            try { _tray.ShowBalloonTip(2500, AppInfo.ProductName, msg, ToolTipIcon.Info); } catch { }
         }
         RefreshQuickBar();
         return r;
@@ -1159,7 +1176,7 @@ public sealed class MainForm : Form
     private void HideToTray()
     {
         Hide();
-        _tray.ShowBalloonTip(1500, "창자리 (WindowDock)", "트레이에서 계속 실행 중입니다.", ToolTipIcon.Info);
+        _tray.ShowBalloonTip(1500, AppInfo.ProductName, "트레이에서 계속 실행 중입니다.", ToolTipIcon.Info);
     }
 
     private void ShowFromTray()
@@ -1172,6 +1189,78 @@ public sealed class MainForm : Form
         BringToFront();
         Activate();
     }
+
+    /// <summary>
+    /// Tray "단축키 설정…": shows the main window, then opens the same settings dialog as the main
+    /// button. Opens nothing new if the dialog (or any other modal) is already open. Never applies a
+    /// layout, never assigns slots or enables keys by itself.
+    /// </summary>
+    private void OpenHotkeySettingsFromTray()
+    {
+        ShowFromTray();
+        if (_hotkeyDialogOpen)
+        {
+            try { _openHotkeyDialog?.Activate(); } catch { }
+            return;
+        }
+        if (IsExplicitApplyBlocked(out var why))
+        {
+            AppendStatus($"단축키 설정을 열 수 없습니다: {why}. 열린 창을 닫은 뒤 다시 시도하세요.");
+            return;
+        }
+        // Deferred so the tray menu has closed before the modal dialog starts.
+        BeginInvoke(new Action(DoHotkeySettings));
+    }
+
+    /// <summary>
+    /// Called from a thread-pool thread when a second normal launch signals this instance. Only
+    /// marshals to the UI thread. A request that arrives before the form is ready (no handle yet /
+    /// Bootstrap not finished — the listener is created before Application.Run) is QUEUED and
+    /// delivered by Bootstrap, so it is never lost. Returns false only when the form is closing or
+    /// disposed.
+    /// </summary>
+    public bool RequestExternalActivation()
+    {
+        if (IsDisposed || _reallyExit) return false;
+        if (!_activationReady)
+        {
+            Interlocked.Exchange(ref _pendingExternalActivation, 1);
+            // Handshake with Bootstrap: if it became ready meanwhile, exactly one side drains.
+            if (_activationReady && Interlocked.Exchange(ref _pendingExternalActivation, 0) == 1)
+                return PostExternalActivation();
+            return true;
+        }
+        return PostExternalActivation();
+    }
+
+    private bool PostExternalActivation()
+    {
+        try
+        {
+            BeginInvoke(new Action(() =>
+            {
+                if (IsDisposed || _reallyExit) return;
+                _externalActivationCount++;
+                ShowFromTray();
+            }));
+            return true;
+        }
+        catch (InvalidOperationException) { return false; } // includes ObjectDisposedException
+    }
+
+    /// <summary>UI thread, end of Bootstrap: accept activations and deliver one queued request.</summary>
+    private void MarkActivationReady()
+    {
+        _activationReady = true;
+        if (Interlocked.Exchange(ref _pendingExternalActivation, 0) == 1)
+        {
+            // Posted (not called) so in tray-start mode it runs after the suppressed first show.
+            PostExternalActivation();
+        }
+    }
+
+    /// <summary>Set by Program when the activation listener could not be created (reported in status).</summary>
+    public void SetActivationListenerError(string reason) => _activationListenerError = reason;
 
     private void ExitFromTray()
     {
@@ -1191,6 +1280,10 @@ public sealed class MainForm : Form
         ShutdownHotkeys();
         _tray.Visible = false;
         _tray.Dispose();
+        if (_trayIconOwned)
+        {
+            try { _trayIcon.Dispose(); } catch { }
+        }
     }
 
     public void AppendStatus(string s)
@@ -1388,6 +1481,13 @@ public sealed class MainForm : Form
 
     /// <summary>BLOCKING (call through BeginInvoke): the real hotkey settings dialog.</summary>
     public void UiSmokeOpenHotkeySettings() => DoHotkeySettings();
+
+    // --- v0.2.1 identity / activation QA hooks ---
+    public int UiSmokeExternalActivationCount => _externalActivationCount;
+    /// <summary>True when the form uses the embedded WindowDock icon (not the generic fallback).</summary>
+    public bool UiSmokeFormIconIsEmbedded => AppIcon.IsLoaded && ReferenceEquals(Icon, AppIcon.Icon);
+    /// <summary>True when the tray uses an icon derived from the embedded WindowDock icon.</summary>
+    public bool UiSmokeTrayIconIsEmbedded => AppIcon.IsLoaded && _trayIconOwned && ReferenceEquals(_tray.Icon, _trayIcon);
 
     private sealed class ProfileRow
     {

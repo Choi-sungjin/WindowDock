@@ -6,12 +6,14 @@
 
 [실행 파일 다운로드](https://github.com/Choi-sungjin/WindowDock/releases/latest) · [사용법](docs/사용법.md) · [검증 범위](docs/검증.md)
 
-## 운영체제별 다운로드 · v0.3.0
+## 운영체제별 다운로드
 
 | 운영체제 | 다운로드 파일 | 시작 방법 |
 | --- | --- | --- |
-| Windows x64 | [WindowDock-v0.3.0-win-x64.zip](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.0/WindowDock-v0.3.0-win-x64.zip) | 압축 해제 후 `WindowLayoutManager.exe` 실행 |
+| Windows x64 | [WindowDock-v0.3.1-win-x64.zip](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.1/WindowDock-v0.3.1-win-x64.zip) | 압축 해제 후 `WindowLayoutManager.exe` 실행 |
 | Linux x64 · Ubuntu 24.04 X11 | [WindowDock-v0.3.0-linux-x64.tar.gz](https://github.com/Choi-sungjin/WindowDock/releases/download/v0.3.0/WindowDock-v0.3.0-linux-x64.tar.gz) | 압축 해제 후 `./install.sh`, 앱 메뉴에서 창자리 실행 |
+
+Windows v0.3.1은 전용 아이콘을 표시하고, 실행 중에 바로가기를 다시 열면 관리 화면을 보여 줍니다. **단축키 설정…**은 관리 화면 상단과 트레이 메뉴에서 열 수 있습니다. 슬롯에 배치를 연결하고 원하는 키를 지정한 뒤 켜 주세요. 기본값은 모두 꺼짐입니다.
 
 **Linux 설치·사용법은 [Linux 안내](docs/Linux.md)를 먼저 보세요.** GTK 3·libwnck 3·시스템 Python이 필요합니다. Wayland와 Linux 전역 단축키는 지원하지 않습니다. Linux는 8개 슬롯 버튼과 이전·다음 버튼으로 배치를 적용하며, 트레이가 없으면 창 닫기로 종료됩니다. 아래 영상·스크린샷과 전역 단축키 설명은 Windows 버전 기준입니다.
 
@@ -50,7 +52,7 @@
 
 **현재 열려 있는 창을 움직이지 않고 감시만 시작하려면**, 저장된 배치를 선택해 **활성 배치로 선택**을 누르고, 자동 배치가 꺼져 있을 때 **자동 배치 시작**을 누르세요.
 
-## 배치 단축키 · v0.2.0
+## 배치 단축키
 
 자주 쓰는 배치를 **8개 슬롯**에 지정하고 버튼이나 전역 단축키로 적용할 수 있습니다. **이전 배치 적용 / 다음 배치 적용**은 저장된 목록 전체를 순서대로 순환합니다.
 
@@ -62,7 +64,7 @@
 
 단축키 설정에서 배치 지정, 키 변경, 개별 켜기·끄기가 가능합니다. 처음에는 단축키가 모두 꺼져 있고 슬롯도 비어 있습니다. 설정하거나 앱을 시작하는 것만으로 기존 창을 이동하지 않습니다. **적용 버튼 또는 켠 단축키를 누르면 현재 창을 배치하고 자동 감시를 시작합니다.** [자세한 사용법](docs/사용법.md#배치-슬롯과-단축키)
 
-![슬롯과 단축키 설정 화면 — 시험용 배치 예시](docs/images/windowdock-hotkeys.png)
+![슬롯과 단축키 설정 화면 — 시험용 배치 예시](docs/images/windowdock-hotkeys-v0.3.1.png)
 
 ## 어떻게 동작하나요?
 

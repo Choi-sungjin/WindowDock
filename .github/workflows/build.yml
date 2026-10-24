@@ -49,12 +49,21 @@ jobs:
         run: |
           dotnet publish src/WindowLayoutManager/WindowLayoutManager.csproj -c Release -r win-x64 --self-contained true -p:DebugType=none -p:DebugSymbols=false -p:IncludeSourceRevisionInInformationalVersion=false -o artifacts/publish
           if ($LASTEXITCODE -ne 0) { throw 'Publish failed' }
-          New-Item -ItemType Directory -Force dist, artifacts/package/WindowDock-v0.3.0-win-x64 | Out-Null
-          Copy-Item artifacts/publish/WindowLayoutManager.exe artifacts/package/WindowDock-v0.3.0-win-x64/
-          Copy-Item README.md, CHANGELOG.md artifacts/package/WindowDock-v0.3.0-win-x64/
-          New-Item -ItemType Directory -Force artifacts/package/WindowDock-v0.3.0-win-x64/docs | Out-Null
-          Copy-Item docs/*.md artifacts/package/WindowDock-v0.3.0-win-x64/docs/
-          Compress-Archive artifacts/package/WindowDock-v0.3.0-win-x64 dist/WindowDock-v0.3.0-win-x64.zip
+          # Release name follows the csproj <Version> (single source of truth).
+          [xml]$proj = Get-Content -Raw src/WindowLayoutManager/WindowLayoutManager.csproj
+          $version = @($proj.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ }) | Select-Object -First 1
+          if (-not $version) { throw 'Version not found in WindowLayoutManager.csproj' }
+          $version = "$version".Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected csproj Version '$version'" }
+          $name = "WindowDock-v$version-win-x64"
+          $pkg = "artifacts/package/$name"
+          Write-Output "Packaging $name"
+          New-Item -ItemType Directory -Force dist, $pkg | Out-Null
+          Copy-Item artifacts/publish/WindowLayoutManager.exe "$pkg/"
+          Copy-Item README.md, CHANGELOG.md "$pkg/"
+          New-Item -ItemType Directory -Force "$pkg/docs" | Out-Null
+          Copy-Item docs/*.md "$pkg/docs/"
+          Compress-Archive $pkg "dist/$name.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release

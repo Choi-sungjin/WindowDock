@@ -23,6 +23,7 @@ public sealed class WindowPickerDialog : Form
     {
         _provider = provider;
         Text = "현재 창에서 배치 저장";
+        Icon = AppIcon.ForForm; // shared process-lifetime icon; not owned/disposed by the dialog
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(880, 540);
         Size = new Size(980, 640);

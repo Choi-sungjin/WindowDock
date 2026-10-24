@@ -49,6 +49,12 @@ public static partial class SelfTestCommand
         T_Settings_DuplicateProperty_DefaultsNotCrash,
         T_Enumerate_OwnBlockedThreadWindow_NoTitleWait,
         T_CaptureBox_CaptureComboValidates,
+        // Round 24 (v0.2.1)
+        T_AppIcon_EmbeddedLoadsAllSizes,
+        T_AppInfo_TitleHasAssemblyVersion,
+        T_Activation_NormalSecondLaunchSignalsListenerOnce,
+        T_Activation_DuplicateAutostartIsSilentAndSendsNothing,
+        T_Activation_NoListenerReportsUnavailableQuickly,
     };
 
     // ---------- helpers ----------
@@ -565,6 +571,75 @@ public static partial class SelfTestCommand
         bool ok = !f12 && f12KeptOld && !noMod && ok23 && box.Key == Keys.F23 && box.Shift && lastFeedback == null
                   && box.Text == "Ctrl+Alt+Shift+F23";
         return (nameof(T_CaptureBox_CaptureComboValidates), ok, $"text={box.Text}");
+    }
+
+    // ---------- Round 24: icon, title, second-launch activation (isolated QA event names) ----------
+
+    private static (string, bool, string?) T_AppIcon_EmbeddedLoadsAllSizes()
+    {
+        var sizes = App.AppIcon.FrameSizes();
+        var required = new[] { 16, 20, 24, 32, 48, 64, 128, 256 };
+        bool framesOk = required.All(sizes.Contains);
+        bool small = false, large = false;
+        if (App.AppIcon.Icon is { } ico)
+        {
+            using var s16 = new Icon(ico, 16, 16);
+            using var s32 = new Icon(ico, 32, 32);
+            small = s16.Width == 16 && s16.Height == 16;
+            large = s32.Width == 32 && s32.Height == 32;
+        }
+        bool ok = App.AppIcon.IsLoaded && App.AppIcon.LoadError == null && framesOk && small && large;
+        return (nameof(T_AppIcon_EmbeddedLoadsAllSizes), ok,
+            $"loaded={App.AppIcon.IsLoaded} err={App.AppIcon.LoadError} sizes=[{string.Join(",", sizes)}] s16={small} s32={large}");
+    }
+
+    private static (string, bool, string?) T_AppInfo_TitleHasAssemblyVersion()
+    {
+        var v = typeof(App.AppInfo).Assembly.GetName().Version!;
+        var expected = $"{v.Major}.{v.Minor}.{v.Build}";
+        var title = App.AppInfo.ProductTitle;
+        bool ok = App.AppInfo.DisplayVersion == expected && title.Contains("WindowDock") && title.EndsWith("v" + expected);
+        return (nameof(T_AppInfo_TitleHasAssemblyVersion), ok, title);
+    }
+
+    private static (string, bool, string?) T_Activation_NormalSecondLaunchSignalsListenerOnce()
+    {
+        var name = App.SingleInstanceActivation.EventNameForScope("st-" + Guid.NewGuid().ToString("N")[..12]);
+        using var fired = new ManualResetEventSlim(false);
+        int calls = 0;
+        using var listener = new App.ActivationListener(name, () => { Interlocked.Increment(ref calls); fired.Set(); });
+        var outcome = App.SingleInstanceActivation.HandleSecondInstance(false, name, TimeSpan.FromSeconds(2));
+        bool got = fired.Wait(2000);
+        Thread.Sleep(200); // a spurious second callback would show up here
+        bool ok = outcome == App.SecondInstanceOutcome.ActivatedExisting && got && Volatile.Read(ref calls) == 1 && listener.SignalCount == 1;
+        return (nameof(T_Activation_NormalSecondLaunchSignalsListenerOnce), ok, $"outcome={outcome} calls={calls}");
+    }
+
+    private static (string, bool, string?) T_Activation_DuplicateAutostartIsSilentAndSendsNothing()
+    {
+        var name = App.SingleInstanceActivation.EventNameForScope("st-" + Guid.NewGuid().ToString("N")[..12]);
+        int calls = 0;
+        using var listener = new App.ActivationListener(name, () => Interlocked.Increment(ref calls));
+        var outcome = App.SingleInstanceActivation.HandleSecondInstance(true, name, TimeSpan.FromSeconds(2));
+        Thread.Sleep(500);
+        bool ok = outcome == App.SecondInstanceOutcome.SilentAutostartDuplicate && Volatile.Read(ref calls) == 0 && listener.SignalCount == 0;
+        return (nameof(T_Activation_DuplicateAutostartIsSilentAndSendsNothing), ok, $"outcome={outcome} calls={calls}");
+    }
+
+    private static (string, bool, string?) T_Activation_NoListenerReportsUnavailableQuickly()
+    {
+        var name = App.SingleInstanceActivation.EventNameForScope("st-none-" + Guid.NewGuid().ToString("N")[..12]);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var outcome = App.SingleInstanceActivation.HandleSecondInstance(false, name, TimeSpan.FromMilliseconds(300));
+        sw.Stop();
+        // After a listener is disposed its name must be gone again (no leaked handle).
+        var name2 = App.SingleInstanceActivation.EventNameForScope("st-gone-" + Guid.NewGuid().ToString("N")[..12]);
+        var l = new App.ActivationListener(name2, () => { });
+        l.Dispose();
+        bool released = !EventWaitHandle.TryOpenExisting(name2, out var leftover);
+        leftover?.Dispose();
+        bool ok = outcome == App.SecondInstanceOutcome.ActivationUnavailable && sw.ElapsedMilliseconds < 2000 && released;
+        return (nameof(T_Activation_NoListenerReportsUnavailableQuickly), ok, $"outcome={outcome} ms={sw.ElapsedMilliseconds} released={released}");
     }
 
     // ---------- Previous / Next ordering ----------

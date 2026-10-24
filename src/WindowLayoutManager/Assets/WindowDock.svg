@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 창자리 (WindowDock) app icon. Vector source of truth; the multi-size .ico is produced by
+     Generate-WindowDockIcon.ps1 from the SAME geometry (256-unit grid). No text. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1E3A8A"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <!-- navy/blue rounded tile -->
+  <rect x="12" y="12" width="232" height="232" rx="52" ry="52" fill="url(#tile)"/>
+  <!-- back window (white, slightly translucent) -->
+  <rect x="48" y="56" width="116" height="88" rx="10" ry="10" fill="#FFFFFF" fill-opacity="0.72"/>
+  <!-- front window (white) with a light title bar -->
+  <rect x="88" y="104" width="120" height="92" rx="10" ry="10" fill="#FFFFFF"/>
+  <rect x="88" y="104" width="120" height="20" rx="10" ry="10" fill="#BFDBFE"/>
+  <rect x="88" y="114" width="120" height="10" fill="#BFDBFE"/>
+  <!-- teal docking corner (bracket at the front window's bottom-right) -->
+  <path d="M 222 158 L 222 210 L 170 210" fill="none" stroke="#14B8A6" stroke-width="16"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

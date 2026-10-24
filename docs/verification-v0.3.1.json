@@ -1,0 +1,154 @@
+{
+  "version": "0.3.1",
+  "date": "2026-10-24",
+  "platform": "Windows x64",
+  "executableSha256": "69F78738F47674A169ACA685E10BA6E68528745099C56363C7DD14616CAB4BB6",
+  "iconSha256": "657922F2678EF644424914F2A2777CF5B2129241A0CBA1164A6170B4C686540E",
+  "sourceAuthorship": "Claude Code",
+  "independentBuildAndReview": "Codex",
+  "build": {
+    "warnings": 0,
+    "errors": 0
+  },
+  "selfTest": {
+    "passed": 95,
+    "total": 95,
+    "failed": 0
+  },
+  "activationSmoke": {
+    "ok": true,
+    "error": null,
+    "timeouts": [],
+    "iconLoaded": true,
+    "iconLoadError": null,
+    "iconFrameSizes": [
+      16,
+      20,
+      24,
+      32,
+      48,
+      64,
+      128,
+      256
+    ],
+    "iconFramesOk": true,
+    "formIconEmbedded": true,
+    "trayIconEmbedded": true,
+    "titleOk": true,
+    "title": "창자리 (WindowDock) v0.3.1",
+    "traySettingsItemPresent": true,
+    "startupHidden": true,
+    "dupClientExit": 10,
+    "dupStayedHidden": true,
+    "signalsAfterDup": 0,
+    "normalClientExit": 0,
+    "normalShownVisible": true,
+    "normalShowInTaskbar": true,
+    "signalsAfterNormal": 1,
+    "externalActivationsAfterNormal": 1,
+    "hiddenAgain": true,
+    "dupAgainClientExit": 10,
+    "dupAgainStayedHidden": true,
+    "signalsAfterDupAgain": 1,
+    "noListenerOutcome": "ActivationUnavailable",
+    "noListenerMs": 329,
+    "traySettingsDialogOpened": true,
+    "traySettingsMainShown": true,
+    "traySettingsNoApply": true,
+    "traySettingsDetail": "closed=True cfgSame=True statusSame=True nothingAssigned=True noApply=True monitoring=False",
+    "applicationRunReturned": true,
+    "listenerReleased": true,
+    "preHandleNoHandleAtRequest": true,
+    "preHandleRequestAccepted": true,
+    "preHandleNotShownBeforeRun": true,
+    "preHandleShownAfterStartup": true,
+    "preHandleActivationCount": 1,
+    "preHandleMoves": 0,
+    "preHandleOk": true
+  },
+  "hotkeySmoke": {
+    "defaultAndMinimumDialogLayout": true,
+    "startupMoves": 0,
+    "ok": true,
+    "lockedSavePreserved": true,
+    "minimumMainLayout": true,
+    "syntheticHotkeyDelivery": true
+  },
+  "uiSmoke": {
+    "phases": 15,
+    "ok": true,
+    "scopeViolations": 0
+  },
+  "trayStart": {
+    "monitoringOnPassed": true,
+    "monitoringOffPassed": true,
+    "existingWindowMovesAtStartup": 0
+  },
+  "actualOsKeyboard": {
+    "scope": "Independently built host with the final product assembly and one PID plus creation-time guarded native fixture",
+    "scopeViolations": 0,
+    "moves": 4,
+    "results": [
+      {
+        "action": "slot1",
+        "ok": true,
+        "target": [
+          650,
+          200,
+          400,
+          250
+        ]
+      },
+      {
+        "action": "slot8",
+        "ok": true,
+        "target": [
+          1200,
+          200,
+          400,
+          250
+        ]
+      },
+      {
+        "action": "next",
+        "ok": true,
+        "target": [
+          100,
+          200,
+          400,
+          250
+        ]
+      },
+      {
+        "action": "previous",
+        "ok": true,
+        "target": [
+          1200,
+          200,
+          400,
+          250
+        ]
+      }
+    ]
+  },
+  "dailyDeployment": {
+    "ordinarySecondLaunchOpenedExistingMain": true,
+    "userDataFilesByteIdentical": 3,
+    "executableHashMatched": true,
+    "logonTaskEnabled": true,
+    "shortcutIconExtractedAndVisuallyReviewed": true,
+    "allTenKeyEditorsVisible": true,
+    "existingUserWindowsUnchanged": 6,
+    "productionDuplicateAutostartStayedHidden": true,
+    "activeProfileAndMonitoringPreserved": true,
+    "mainAndSettingsIconsVisuallyReviewed": true,
+    "logonArguments": "--start-in-tray",
+    "healthFailures": 0
+  },
+  "limits": [
+    "Physical reboot/logoff not performed; registered logon task invoked directly.",
+    "One physical 5120x1440 display; multiple monitors, mixed DPI and elevated applications not reverified.",
+    "Linux remains v0.3.0 and has no source changes in this Windows patch.",
+    "OS keyboard validation uses an isolated native fixture; synthetic smoke results are reported separately."
+  ]
+}
